@@ -60,11 +60,10 @@ export default function Home() {
         // this when remote is non-empty would strand any half-migrated
         // sessions from a previous failed attempt permanently in localStorage.
         if (!cancelled) {
-          const migrated = await migrateLocalStorageIfNeeded();
+          const existingIds = new Set(remote.map((s) => s.id));
+          const migrated = await migrateLocalStorageIfNeeded(existingIds);
           if (migrated.length > 0) {
-            const byId = new Map(remote.map((s) => [s.id, s]));
-            for (const s of migrated) byId.set(s.id, s);
-            remote = Array.from(byId.values()).sort(
+            remote = [...remote, ...migrated].sort(
               (a, b) => b.updatedAt - a.updatedAt
             );
           }
@@ -448,8 +447,15 @@ export default function Home() {
  * user doesn't lose their history when we switch away from localStorage.
  * Best-effort — failures are swallowed so the hard-wall sign-in UX still
  * works for brand-new users.
+ *
+ * Skips any session whose id is already on the server. Without that guard,
+ * a retry on a partially-failed migration would `upsertSessionFull` the
+ * original localStorage snapshot over any edits the user has made since
+ * (messages, reports, etc.) — a silent destructive data loss.
  */
-async function migrateLocalStorageIfNeeded(): Promise<Session[]> {
+async function migrateLocalStorageIfNeeded(
+  existingIds: Set<string>
+): Promise<Session[]> {
   if (typeof window === "undefined") return [];
   if (window.localStorage.getItem(MIGRATION_FLAG)) return [];
   const legacy = loadLocalSessions();
@@ -458,7 +464,14 @@ async function migrateLocalStorageIfNeeded(): Promise<Session[]> {
     return [];
   }
   const migrated: Session[] = [];
+  let skippedCount = 0;
   for (const s of legacy) {
+    if (existingIds.has(s.id)) {
+      // Already on the server from a prior partial migration — skip so
+      // we don't overwrite post-migration edits with stale data.
+      skippedCount++;
+      continue;
+    }
     try {
       const saved = await persistSession(s);
       migrated.push(saved);
@@ -466,7 +479,7 @@ async function migrateLocalStorageIfNeeded(): Promise<Session[]> {
       /* skip — keep legacy in localStorage for manual recovery */
     }
   }
-  if (migrated.length === legacy.length) {
+  if (migrated.length + skippedCount === legacy.length) {
     window.localStorage.setItem(MIGRATION_FLAG, String(Date.now()));
   }
   migrated.sort((a, b) => b.updatedAt - a.updatedAt);
