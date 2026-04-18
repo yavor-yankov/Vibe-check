@@ -15,12 +15,14 @@ import type {
   RedTeamReport,
   Session,
 } from "@/lib/types";
+import { loadSessions as loadLocalSessions, newSession } from "@/lib/storage";
 import {
-  deleteSession,
-  loadSessions,
-  newSession,
-  upsertSession,
-} from "@/lib/storage";
+  deleteSessionRemote,
+  fetchSessions,
+  persistSession,
+} from "@/lib/client/sessions-api";
+
+const MIGRATION_FLAG = "vibe-check-migrated-v1";
 
 export default function Home() {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -29,6 +31,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [isRedTeamLoading, setIsRedTeamLoading] = useState(false);
   const [redTeamError, setRedTeamError] = useState<string | null>(null);
+  const [isHydrated, setIsHydrated] = useState(false);
 
   // Keep a ref to the latest active session so async callbacks don't
   // act on stale closures (e.g. runRedTeam finishing after the user
@@ -38,19 +41,56 @@ export default function Home() {
     currentRef.current = current;
   }, [current]);
 
-  // hydrate from localStorage on mount (client-only)
-  /* eslint-disable react-hooks/set-state-in-effect */
+  // Hydrate from Postgres on mount. If it's empty and the browser has
+  // legacy localStorage sessions, migrate them once.
   useEffect(() => {
-    const all = loadSessions();
-    setSessions(all);
-    setCurrent(all[0] ?? newSession());
+    let cancelled = false;
+    (async () => {
+      try {
+        let remote = await fetchSessions();
+        if (!cancelled && remote.length === 0) {
+          const migrated = await migrateLocalStorageIfNeeded();
+          if (migrated.length > 0) {
+            remote = migrated;
+          }
+        }
+        if (cancelled) return;
+        setSessions(remote);
+        setCurrent(remote[0] ?? newSession());
+      } catch (err) {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : "Failed to load sessions");
+        setCurrent(newSession());
+      } finally {
+        if (!cancelled) setIsHydrated(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   const persist = useCallback((s: Session) => {
-    const all = upsertSession(s);
-    setSessions(all);
-    setCurrent(s);
+    const stamped: Session = { ...s, updatedAt: Date.now() };
+    setCurrent(stamped);
+    setSessions((prev) => {
+      const idx = prev.findIndex((x) => x.id === stamped.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = stamped;
+        return next.sort((a, b) => b.updatedAt - a.updatedAt);
+      }
+      return [stamped, ...prev];
+    });
+    // Fire server write in the background. We don't block the UI on it,
+    // but surface errors so the user knows persistence failed.
+    void persistSession(stamped).catch((err) => {
+      setError(
+        err instanceof Error
+          ? `Save failed: ${err.message}`
+          : "Save failed"
+      );
+    });
   }, []);
 
   const resetRedTeamState = () => {
@@ -75,12 +115,19 @@ export default function Home() {
   };
 
   const handleDelete = (id: string) => {
-    const all = deleteSession(id);
-    setSessions(all);
+    setSessions((prev) => prev.filter((s) => s.id !== id));
     if (current?.id === id) {
-      setCurrent(all[0] ?? newSession());
+      const remaining = sessions.filter((s) => s.id !== id);
+      setCurrent(remaining[0] ?? newSession());
       resetRedTeamState();
     }
+    void deleteSessionRemote(id).catch((err) => {
+      setError(
+        err instanceof Error
+          ? `Delete failed: ${err.message}`
+          : "Delete failed"
+      );
+    });
   };
 
   const startInterview = async (seed: string) => {
@@ -235,8 +282,6 @@ export default function Home() {
     if (!current) return;
     setError(null);
     resetRedTeamState();
-    // Keep the prior report and competitors around so a failed re-run
-    // reverts cleanly to what the user had before.
     const originalSummary = current.ideaSummary;
     const scanning: Session = {
       ...current,
@@ -272,22 +317,15 @@ export default function Home() {
       if (!res.ok || !data.redTeam) {
         throw new Error(data.error || "Red-team pass failed");
       }
-      // Merge onto whatever's in storage for this id — don't clobber
-      // fields that may have changed (e.g. a concurrent refine).
-      const target = loadSessions().find((s) => s.id === sessionId);
-      if (!target) return; // session was deleted
-      // Refine ran while we were in flight — the red-team is for a
-      // superseded report. Drop it; the user can re-open to re-run.
+      // Use the latest in-memory session instead of re-fetching; the
+      // generation guard below still catches concurrent refines.
+      const live = currentRef.current;
+      const target = live?.id === sessionId ? live : null;
+      if (!target) return; // session was deleted or switched
       if ((target.reportGeneration ?? 0) !== generationAtStart) return;
       const updated: Session = { ...target, redTeamReport: data.redTeam };
-      const all = upsertSession(updated);
-      setSessions(all);
-      if (currentRef.current?.id === sessionId) {
-        setCurrent(updated);
-      }
+      persist(updated);
     } catch (err) {
-      // Only surface the error if the session + generation still match —
-      // otherwise the user has already moved on.
       const live = currentRef.current;
       if (
         live?.id === sessionId &&
@@ -307,7 +345,7 @@ export default function Home() {
     }
   };
 
-  if (!current) {
+  if (!isHydrated || !current) {
     return (
       <div className="flex-1 grid place-items-center text-[color:var(--muted)]">
         Loading…
@@ -365,4 +403,37 @@ export default function Home() {
       </main>
     </div>
   );
+}
+
+/**
+ * One-time localStorage → Postgres migration.
+ *
+ * If this browser has legacy sessions saved under `vibe-check-sessions-v1`
+ * and they haven't been uploaded yet, post them to `/api/sessions` so the
+ * user doesn't lose their history when we switch away from localStorage.
+ * Best-effort — failures are swallowed so the hard-wall sign-in UX still
+ * works for brand-new users.
+ */
+async function migrateLocalStorageIfNeeded(): Promise<Session[]> {
+  if (typeof window === "undefined") return [];
+  if (window.localStorage.getItem(MIGRATION_FLAG)) return [];
+  const legacy = loadLocalSessions();
+  if (legacy.length === 0) {
+    window.localStorage.setItem(MIGRATION_FLAG, String(Date.now()));
+    return [];
+  }
+  const migrated: Session[] = [];
+  for (const s of legacy) {
+    try {
+      const saved = await persistSession(s);
+      migrated.push(saved);
+    } catch {
+      /* skip — keep legacy in localStorage for manual recovery */
+    }
+  }
+  if (migrated.length === legacy.length) {
+    window.localStorage.setItem(MIGRATION_FLAG, String(Date.now()));
+  }
+  migrated.sort((a, b) => b.updatedAt - a.updatedAt);
+  return migrated;
 }
