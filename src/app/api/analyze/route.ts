@@ -63,12 +63,21 @@ export async function POST(request: NextRequest) {
   try {
     plan = await consumeUsage();
   } catch (err) {
-    const e = err as Error & { code?: string };
+    const e = err as Error & { code?: string; message?: string };
     if (e.code === "QUOTA_EXCEEDED") {
       return Response.json({ error: e.message }, { status: 402 });
     }
-    const msg = e instanceof Error ? e.message : "Not authenticated";
-    return Response.json({ error: msg }, { status: 401 });
+    // Only surface 401 when the caller truly isn't signed in. Supabase
+    // PostgrestErrors aren't instanceof Error but do carry a .message;
+    // treating them as 401 hides real database failures from operators
+    // and triggers misleading sign-in redirects on the client.
+    const isAuthError =
+      e instanceof Error && e.message === "Not authenticated";
+    const msg = e.message ?? "Unknown billing error";
+    return Response.json(
+      { error: msg },
+      { status: isAuthError ? 401 : 500 }
+    );
   }
 
   const transcript = (messages ?? [])
