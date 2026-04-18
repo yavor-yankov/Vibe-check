@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { getGeminiClient, modelForTier } from "@/lib/gemini";
 import { ANALYSIS_SYSTEM_PROMPT } from "@/lib/prompts";
-import { consumeUsage } from "@/lib/billing/usage";
+import { consumeUsage, refundUsage } from "@/lib/billing/usage";
 import type {
   AnalysisReport,
   ChatMessage,
@@ -100,6 +100,9 @@ export async function POST(request: NextRequest) {
     const report = JSON.parse(jsonStr) as AnalysisReport;
     return Response.json({ report });
   } catch (err) {
+    // Analysis failed after we already charged the user — roll the slot
+    // back so transient Gemini errors don't eat free-tier quota.
+    await refundUsage(plan.userId, plan.usageMonth);
     const msg = err instanceof Error ? err.message : "analysis failed";
     return Response.json(
       { error: `Failed to generate analysis: ${msg}` },

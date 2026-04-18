@@ -33,3 +33,85 @@ create index if not exists tavily_cache_expires_at_idx
 -- The cache is read+written server-side via the service role client only.
 -- Enable RLS and DO NOT grant any policy, so it's inaccessible via anon/auth.
 alter table public.tavily_cache enable row level security;
+
+-- ---------------------------------------------------------------------------
+-- increment_usage RPC: atomic read-check-write against public.users so
+-- concurrent /api/analyze calls for the same user can't both sneak past the
+-- monthly quota (classic TOCTOU). We run this as SECURITY DEFINER so RLS
+-- doesn't block the update when called from a user-scoped client.
+--
+-- Parameters:
+--   p_user_id      — user whose counter to bump
+--   p_month        — YYYY-MM bucket key
+--   p_unlimited    — true when the tier has no quota (pro / lifetime)
+--   p_monthly_quota— max allowed checks per month (ignored when unlimited)
+--
+-- Returns the post-increment counter value on success.
+-- Raises 'QUOTA_EXCEEDED' when the limit would be crossed so the API layer
+-- can map it to a 402.
+-- ---------------------------------------------------------------------------
+create or replace function public.increment_usage(
+  p_user_id uuid,
+  p_month text,
+  p_unlimited boolean,
+  p_monthly_quota integer
+) returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_new_count integer;
+begin
+  update public.users
+     set usage_month = p_month,
+         usage_count = case
+           when usage_month = p_month then usage_count + 1
+           else 1
+         end
+   where id = p_user_id
+     and (
+       p_unlimited
+       or coalesce(
+            case when usage_month = p_month then usage_count else 0 end,
+            0
+          ) < p_monthly_quota
+     )
+   returning usage_count into v_new_count;
+
+  if v_new_count is null then
+    raise exception 'QUOTA_EXCEEDED' using errcode = 'P0001';
+  end if;
+
+  return v_new_count;
+end;
+$$;
+
+-- Decrement is used to roll back a charge when the downstream LLM call
+-- fails, so we don't burn a free-tier slot for a transient error. Clamped
+-- at 0 so it can't go negative.
+create or replace function public.decrement_usage(
+  p_user_id uuid,
+  p_month text
+) returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_new_count integer;
+begin
+  update public.users
+     set usage_count = greatest(0, usage_count - 1)
+   where id = p_user_id
+     and usage_month = p_month
+   returning usage_count into v_new_count;
+
+  return coalesce(v_new_count, 0);
+end;
+$$;
+
+grant execute on function public.increment_usage(uuid, text, boolean, integer)
+  to authenticated, service_role;
+grant execute on function public.decrement_usage(uuid, text)
+  to authenticated, service_role;

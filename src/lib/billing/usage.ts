@@ -87,39 +87,69 @@ export async function getPlanSnapshot(): Promise<PlanSnapshot | null> {
  * Atomically increment the signed-in user's usage counter for the
  * current month, rolling the bucket over if it's stale.
  *
+ * Delegates the read-check-write to the `public.increment_usage` RPC
+ * (see migration 0002) so concurrent requests from the same user can't
+ * both sneak past the quota via a TOCTOU race.
+ *
  * Returns the post-increment snapshot, or throws when the user would
- * exceed their quota. Callers should catch that error and surface a
- * 402 Payment Required.
+ * exceed their quota. Callers should catch that error (`code ==
+ * "QUOTA_EXCEEDED"`) and surface a 402 Payment Required.
  */
 export async function consumeUsage(): Promise<PlanSnapshot> {
   const snapshot = await getPlanSnapshot();
   if (!snapshot) throw new Error("Not authenticated");
-  if (snapshot.remaining <= 0) {
-    const err = new Error(
-      `Monthly quota reached (${snapshot.quota}). Upgrade to Pro for unlimited vibe checks.`
-    );
-    (err as Error & { code?: string }).code = "QUOTA_EXCEEDED";
-    throw err;
-  }
 
   const month = currentUsageMonth();
-  const nextCount =
-    snapshot.usageMonth === month ? snapshot.usageCount + 1 : 1;
+  const unlimited = snapshot.quota === Infinity;
+  // The RPC ignores p_monthly_quota when p_unlimited=true, but we still
+  // need to pass a concrete integer through the JSON-RPC boundary.
+  const quotaParam = unlimited ? 0 : snapshot.quota;
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase
-    .from("users")
-    .update({ usage_month: month, usage_count: nextCount })
-    .eq("id", snapshot.userId);
-  if (error) throw error;
+  const { data, error } = await supabase.rpc("increment_usage", {
+    p_user_id: snapshot.userId,
+    p_month: month,
+    p_unlimited: unlimited,
+    p_monthly_quota: quotaParam,
+  });
 
+  if (error) {
+    const raised = (error.message ?? "").toUpperCase();
+    if (raised.includes("QUOTA_EXCEEDED")) {
+      const err = new Error(
+        `Monthly quota reached (${snapshot.quota}). Upgrade to Pro for unlimited vibe checks.`
+      );
+      (err as Error & { code?: string }).code = "QUOTA_EXCEEDED";
+      throw err;
+    }
+    throw error;
+  }
+
+  const nextCount = typeof data === "number" ? data : snapshot.usageCount + 1;
   return {
     ...snapshot,
     usageMonth: month,
     usageCount: nextCount,
-    remaining:
-      snapshot.quota === Infinity
-        ? Infinity
-        : Math.max(0, snapshot.quota - nextCount),
+    remaining: unlimited ? Infinity : Math.max(0, snapshot.quota - nextCount),
   };
+}
+
+/**
+ * Roll back a previous `consumeUsage()` when the downstream work fails
+ * so users don't get charged a slot for a transient error. Best-effort
+ * — swallows errors because the refund is never the primary request.
+ */
+export async function refundUsage(
+  userId: string,
+  month: string
+): Promise<void> {
+  try {
+    const supabase = await createSupabaseServerClient();
+    await supabase.rpc("decrement_usage", {
+      p_user_id: userId,
+      p_month: month,
+    });
+  } catch (err) {
+    console.error("refundUsage failed", err);
+  }
 }

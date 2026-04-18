@@ -11,6 +11,16 @@ export type Verdict = "build_it" | "iterate" | "rethink" | "skip";
 
 type EmptyRelationships = [];
 
+type SessionFkRelationship<Name extends string> = [
+  {
+    foreignKeyName: Name;
+    columns: ["session_id"];
+    isOneToOne: false;
+    referencedRelation: "sessions";
+    referencedColumns: ["id"];
+  }
+];
+
 export interface Database {
   public: {
     Tables: {
@@ -121,7 +131,7 @@ export interface Database {
         Update: {
           content?: string;
         };
-        Relationships: EmptyRelationships;
+        Relationships: SessionFkRelationship<"messages_session_id_fkey">;
       };
       competitors: {
         Row: {
@@ -144,7 +154,7 @@ export interface Database {
           url?: string;
           snippet?: string | null;
         };
-        Relationships: EmptyRelationships;
+        Relationships: SessionFkRelationship<"competitors_session_id_fkey">;
       };
       reports: {
         Row: {
@@ -189,7 +199,7 @@ export interface Database {
           roadmap?: Array<{ title: string; detail: string; estimate: string }>;
           mvp_scope?: string[];
         };
-        Relationships: EmptyRelationships;
+        Relationships: SessionFkRelationship<"reports_session_id_fkey">;
       };
       red_team_reports: {
         Row: {
@@ -215,11 +225,28 @@ export interface Database {
           silent_killers?: string[];
           report_generation?: number;
         };
-        Relationships: EmptyRelationships;
+        Relationships: SessionFkRelationship<"red_team_reports_session_id_fkey">;
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      increment_usage: {
+        Args: {
+          p_user_id: string;
+          p_month: string;
+          p_unlimited: boolean;
+          p_monthly_quota: number;
+        };
+        Returns: number;
+      };
+      decrement_usage: {
+        Args: {
+          p_user_id: string;
+          p_month: string;
+        };
+        Returns: number;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
