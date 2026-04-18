@@ -103,7 +103,10 @@ export default function ReportStage({
   }
 
   function handleRedTeamClick() {
-    if (!redTeamReport && !isRedTeamLoading && !redTeamError && !redTeamOpen) {
+    // Only fire when we're about to *open* the panel with no cached/in-flight
+    // result. Closing (redTeamOpen === true) must never re-fire, and after an
+    // error the user should be able to retry by re-opening the panel.
+    if (!redTeamReport && !isRedTeamLoading && !redTeamOpen) {
       onRedTeam();
     }
     setRedTeamOpen((v) => !v);
