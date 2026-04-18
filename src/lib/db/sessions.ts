@@ -28,6 +28,13 @@ interface SessionWithChildren extends SessionRow {
  *
  * Requires an auth-scoped client (`createSupabaseServerClient()`); RLS
  * guarantees the caller only sees their own rows.
+ *
+ * `reports` and `red_team_reports` are one-to-one (unique FK) children and
+ * are fetched in separate queries — PostgREST's embedded select returns
+ * `null` for these under the nested-RLS policy from a user-scoped JWT, even
+ * though direct SELECTs on the child tables work. Keeping only the
+ * one-to-many relations (`messages`, `competitors`) in the embedded select
+ * sidesteps that.
  */
 export async function listSessions(supabase: DB): Promise<Session[]> {
   const { data, error } = await supabase
@@ -36,14 +43,29 @@ export async function listSessions(supabase: DB): Promise<Session[]> {
       `
       *,
       messages ( * ),
-      competitors ( * ),
-      reports ( * ),
-      red_team_reports ( * )
+      competitors ( * )
     `
     )
     .order("updated_at", { ascending: false });
   if (error) throw error;
-  return (data ?? []).map(rowToSession);
+  const rows = data ?? [];
+  if (rows.length === 0) return [];
+  const ids = rows.map((r) => r.id);
+  const [reportsById, redTeamsById] = await Promise.all([
+    fetchReportsByIds(supabase, ids),
+    fetchRedTeamReportsByIds(supabase, ids),
+  ]);
+  return rows.map((row) =>
+    rowToSession({
+      ...row,
+      messages: row.messages ?? [],
+      competitors: row.competitors ?? [],
+      reports: reportsById.get(row.id) ? [reportsById.get(row.id)!] : [],
+      red_team_reports: redTeamsById.get(row.id)
+        ? [redTeamsById.get(row.id)!]
+        : [],
+    })
+  );
 }
 
 export async function getSession(
@@ -56,15 +78,50 @@ export async function getSession(
       `
       *,
       messages ( * ),
-      competitors ( * ),
-      reports ( * ),
-      red_team_reports ( * )
+      competitors ( * )
     `
     )
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
-  return data ? rowToSession(data) : null;
+  if (!data) return null;
+  const [reportsById, redTeamsById] = await Promise.all([
+    fetchReportsByIds(supabase, [id]),
+    fetchRedTeamReportsByIds(supabase, [id]),
+  ]);
+  return rowToSession({
+    ...data,
+    messages: data.messages ?? [],
+    competitors: data.competitors ?? [],
+    reports: reportsById.get(id) ? [reportsById.get(id)!] : [],
+    red_team_reports: redTeamsById.get(id) ? [redTeamsById.get(id)!] : [],
+  });
+}
+
+async function fetchReportsByIds(
+  supabase: DB,
+  sessionIds: string[]
+): Promise<Map<string, ReportRow>> {
+  if (sessionIds.length === 0) return new Map();
+  const { data, error } = await supabase
+    .from("reports")
+    .select("*")
+    .in("session_id", sessionIds);
+  if (error) throw error;
+  return new Map((data ?? []).map((r) => [r.session_id, r]));
+}
+
+async function fetchRedTeamReportsByIds(
+  supabase: DB,
+  sessionIds: string[]
+): Promise<Map<string, RedTeamRow>> {
+  if (sessionIds.length === 0) return new Map();
+  const { data, error } = await supabase
+    .from("red_team_reports")
+    .select("*")
+    .in("session_id", sessionIds);
+  if (error) throw error;
+  return new Map((data ?? []).map((r) => [r.session_id, r]));
 }
 
 export async function createSession(
