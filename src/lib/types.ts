@@ -68,4 +68,8 @@ export interface Session {
   report: AnalysisReport | null;
   ideaSummary?: string;
   redTeamReport?: RedTeamReport | null;
+  // Monotonic counter bumped on every successful analyze/refine. Used by
+  // runRedTeam to detect a concurrent refine and avoid merging a stale
+  // red-team response onto a freshly re-scored report.
+  reportGeneration?: number;
 }

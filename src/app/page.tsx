@@ -200,6 +200,7 @@ export default function Home() {
         report: analyzeData.report,
         // Refining invalidates the prior red-team pass — force re-run.
         redTeamReport: null,
+        reportGeneration: (scanning.reportGeneration ?? 0) + 1,
       };
       persist(done);
     } catch (err) {
@@ -241,6 +242,7 @@ export default function Home() {
     const snapshot = currentRef.current;
     if (!snapshot || !snapshot.report) return;
     const sessionId = snapshot.id;
+    const generationAtStart = snapshot.reportGeneration ?? 0;
     setRedTeamError(null);
     setIsRedTeamLoading(true);
     try {
@@ -265,6 +267,9 @@ export default function Home() {
       // fields that may have changed (e.g. a concurrent refine).
       const target = loadSessions().find((s) => s.id === sessionId);
       if (!target) return; // session was deleted
+      // Refine ran while we were in flight — the red-team is for a
+      // superseded report. Drop it; the user can re-open to re-run.
+      if ((target.reportGeneration ?? 0) !== generationAtStart) return;
       const updated: Session = { ...target, redTeamReport: data.redTeam };
       const all = upsertSession(updated);
       setSessions(all);
@@ -272,12 +277,22 @@ export default function Home() {
         setCurrent(updated);
       }
     } catch (err) {
-      if (currentRef.current?.id === sessionId) {
+      // Only surface the error if the session + generation still match —
+      // otherwise the user has already moved on.
+      const live = currentRef.current;
+      if (
+        live?.id === sessionId &&
+        (live.reportGeneration ?? 0) === generationAtStart
+      ) {
         const msg = err instanceof Error ? err.message : "Unknown error";
         setRedTeamError(msg);
       }
     } finally {
-      if (currentRef.current?.id === sessionId) {
+      const live = currentRef.current;
+      if (
+        live?.id === sessionId &&
+        (live.reportGeneration ?? 0) === generationAtStart
+      ) {
         setIsRedTeamLoading(false);
       }
     }
