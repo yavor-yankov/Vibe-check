@@ -10,4 +10,7 @@ export function getGeminiClient(): GoogleGenerativeAI {
   return new GoogleGenerativeAI(key);
 }
 
-export const MODEL_NAME = "gemini-2.0-flash";
+// gemini-2.5-flash has the best quality/speed tradeoff on the free tier.
+// Override via GEMINI_MODEL env var if you hit quota issues (e.g. use
+// gemini-2.5-flash-lite or gemini-flash-latest).
+export const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.5-flash";
