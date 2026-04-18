@@ -6,6 +6,7 @@ import type {
   AnalysisReport,
   ChatMessage,
   Competitor,
+  ExpandedInsights,
 } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -14,6 +15,111 @@ interface AnalyzeRequestBody {
   messages: ChatMessage[];
   ideaSummary: string;
   competitors: Competitor[];
+}
+
+// Strip `insights` entirely if the model returned a malformed payload.
+// We'd rather render the original report cleanly than explode the UI on
+// half-formed expanded insights.
+function sanitizeInsights(
+  raw: unknown
+): ExpandedInsights | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const r = raw as Record<string, unknown>;
+
+  const ms = r.marketSize as Record<string, unknown> | undefined;
+  const fs = r.fundingSignal as Record<string, unknown> | undefined;
+  const be = r.buildEffort as Record<string, unknown> | undefined;
+
+  if (!ms || typeof ms.range !== "string" || typeof ms.reasoning !== "string") {
+    return undefined;
+  }
+  if (
+    !fs ||
+    typeof fs.totalRaisedInSpace !== "string" ||
+    typeof fs.summary !== "string"
+  ) {
+    return undefined;
+  }
+  if (
+    !be ||
+    typeof be.bucket !== "string" ||
+    typeof be.teamSize !== "string" ||
+    typeof be.headlineRisk !== "string"
+  ) {
+    return undefined;
+  }
+
+  const confidence =
+    ms.confidence === "low" || ms.confidence === "medium" || ms.confidence === "high"
+      ? ms.confidence
+      : "medium";
+
+  const notableRaises = Array.isArray(fs.notableRaises)
+    ? fs.notableRaises.filter(
+        (x): x is ExpandedInsights["fundingSignal"]["notableRaises"][number] =>
+          !!x &&
+          typeof x === "object" &&
+          typeof (x as Record<string, unknown>).company === "string" &&
+          typeof (x as Record<string, unknown>).amount === "string" &&
+          typeof (x as Record<string, unknown>).year === "string"
+      )
+    : [];
+
+  const graveyard = Array.isArray(r.graveyard)
+    ? r.graveyard.filter(
+        (x): x is ExpandedInsights["graveyard"][number] =>
+          !!x &&
+          typeof x === "object" &&
+          typeof (x as Record<string, unknown>).name === "string" &&
+          typeof (x as Record<string, unknown>).year === "string" &&
+          typeof (x as Record<string, unknown>).reason === "string"
+      )
+    : [];
+
+  const regulatoryFlags = Array.isArray(r.regulatoryFlags)
+    ? r.regulatoryFlags.filter(
+        (x): x is ExpandedInsights["regulatoryFlags"][number] =>
+          !!x &&
+          typeof x === "object" &&
+          typeof (x as Record<string, unknown>).domain === "string" &&
+          typeof (x as Record<string, unknown>).note === "string" &&
+          ["low", "medium", "high"].includes(
+            String((x as Record<string, unknown>).severity)
+          )
+      )
+    : [];
+
+  const pricingBenchmarks = Array.isArray(r.pricingBenchmarks)
+    ? r.pricingBenchmarks.filter(
+        (x): x is ExpandedInsights["pricingBenchmarks"][number] =>
+          !!x &&
+          typeof x === "object" &&
+          typeof (x as Record<string, unknown>).competitor === "string" &&
+          typeof (x as Record<string, unknown>).freeTier === "string" &&
+          typeof (x as Record<string, unknown>).paidTier === "string"
+      )
+    : [];
+
+  return {
+    marketSize: {
+      range: ms.range,
+      confidence,
+      reasoning: ms.reasoning,
+    },
+    fundingSignal: {
+      totalRaisedInSpace: fs.totalRaisedInSpace,
+      summary: fs.summary,
+      notableRaises,
+    },
+    graveyard,
+    buildEffort: {
+      bucket: be.bucket as ExpandedInsights["buildEffort"]["bucket"],
+      teamSize: be.teamSize,
+      headlineRisk: be.headlineRisk,
+    },
+    regulatoryFlags,
+    pricingBenchmarks,
+  };
 }
 
 function extractJson(raw: string): string {
@@ -109,7 +215,13 @@ export async function POST(request: NextRequest) {
     const result = await model.generateContent(userPrompt);
     const raw = result.response.text();
     const jsonStr = extractJson(raw);
-    const report = JSON.parse(jsonStr) as AnalysisReport;
+    const parsed = JSON.parse(jsonStr) as AnalysisReport & {
+      insights?: unknown;
+    };
+    const report: AnalysisReport = {
+      ...parsed,
+      insights: sanitizeInsights(parsed.insights),
+    };
     return Response.json({ report });
   } catch (err) {
     // Analysis failed after we already charged the user — roll the slot

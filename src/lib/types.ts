@@ -36,6 +36,73 @@ export interface RoadmapStep {
   estimate: string;
 }
 
+export interface MarketSizeEstimate {
+  range: string;
+  confidence: "low" | "medium" | "high";
+  reasoning: string;
+}
+
+export interface FundingRaise {
+  company: string;
+  amount: string;
+  year: string;
+  stage?: string;
+}
+
+export interface FundingSignal {
+  totalRaisedInSpace: string;
+  notableRaises: FundingRaise[];
+  summary: string;
+}
+
+export interface GraveyardEntry {
+  name: string;
+  year: string;
+  reason: string;
+}
+
+export type BuildEffortBucket =
+  | "weekend"
+  | "1-2 weeks"
+  | "1-3 months"
+  | "3-6 months"
+  | "6+ months";
+
+export interface BuildEffortEstimate {
+  bucket: BuildEffortBucket;
+  teamSize: string;
+  headlineRisk: string;
+}
+
+export interface RegulatoryFlag {
+  domain: string;
+  severity: "low" | "medium" | "high";
+  note: string;
+}
+
+export type PricingModel =
+  | "freemium"
+  | "subscription"
+  | "one-time"
+  | "usage-based"
+  | "free";
+
+export interface PricingBenchmark {
+  competitor: string;
+  freeTier: string;
+  paidTier: string;
+  model: PricingModel;
+}
+
+export interface ExpandedInsights {
+  marketSize: MarketSizeEstimate;
+  fundingSignal: FundingSignal;
+  graveyard: GraveyardEntry[];
+  buildEffort: BuildEffortEstimate;
+  regulatoryFlags: RegulatoryFlag[];
+  pricingBenchmarks: PricingBenchmark[];
+}
+
 export interface AnalysisReport {
   summary: string;
   verdict: "build_it" | "iterate" | "rethink" | "skip";
@@ -47,6 +114,9 @@ export interface AnalysisReport {
   techStack: TechStackSuggestion;
   roadmap: RoadmapStep[];
   mvpScope: string[];
+  // Optional for backward compat with reports generated before PR-K.
+  // New analyses always populate this; old stored sessions may not have it.
+  insights?: ExpandedInsights;
 }
 
 export interface RedTeamReport {
