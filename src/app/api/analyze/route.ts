@@ -96,7 +96,8 @@ function sanitizeInsights(
           typeof x === "object" &&
           typeof (x as Record<string, unknown>).competitor === "string" &&
           typeof (x as Record<string, unknown>).freeTier === "string" &&
-          typeof (x as Record<string, unknown>).paidTier === "string"
+          typeof (x as Record<string, unknown>).paidTier === "string" &&
+          typeof (x as Record<string, unknown>).model === "string"
       )
     : [];
 
