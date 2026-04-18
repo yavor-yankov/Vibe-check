@@ -225,7 +225,7 @@ export default function Home() {
   const refineAnalysis = async (newSummary: string) => {
     if (!current) return;
     setError(null);
-    setRedTeamError(null);
+    resetRedTeamState();
     // Keep the prior report and competitors around so a failed re-run
     // reverts cleanly to what the user had before.
     const scanning: Session = {
