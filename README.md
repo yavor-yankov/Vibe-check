@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Vibe Check
 
-## Getting Started
+Interview-style validator for app ideas. Walks you through a Socratic chat, scans the web for competitors, then returns a scored report + devil's advocate red-team pass.
 
-First, run the development server:
+## Getting started
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+cp .env.example .env.local      # fill in the keys — see below
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Required env vars
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+See [`.env.example`](./.env.example) for the full list.
 
-## Learn More
+- `GEMINI_API_KEY` — free from https://aistudio.google.com/apikey
+- `TAVILY_API_KEY` — free from https://app.tavily.com (1000 searches / mo)
+- `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` — from https://supabase.com
 
-To learn more about Next.js, take a look at the following resources:
+## Supabase setup (Phase 1)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Create a new project at https://supabase.com/dashboard/new.
+2. Copy the URL, anon key, and service_role key from *Project Settings → API* into `.env.local`.
+3. Run the initial migration: open *SQL Editor* in the Supabase dashboard and paste the contents of [`supabase/migrations/0001_initial_schema.sql`](./supabase/migrations/0001_initial_schema.sql). Or, with the Supabase CLI linked:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+   ```bash
+   pnpm dlx supabase db push
+   ```
 
-## Deploy on Vercel
+The schema creates `users`, `sessions`, `messages`, `competitors`, `reports`, and `red_team_reports` with RLS enabled — a user can only see their own rows.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Stack
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Next.js 16 · React 19 · TypeScript · Tailwind 4 · Zod · Supabase (Postgres + Auth) · Google Gemini · Tavily.
+
+## Roadmap
+
+See [`ROADMAP.md`](./ROADMAP.md) for phased plan (backend + auth → Stripe + cost control → expanded analytics → retention loops → polish).

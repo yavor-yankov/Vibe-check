@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
-import { getGeminiClient, MODEL_NAME } from "@/lib/gemini";
+import { getGeminiClient, modelForTier } from "@/lib/gemini";
 import { INTERVIEW_SYSTEM_PROMPT } from "@/lib/prompts";
+import { getPlanSnapshot } from "@/lib/billing/usage";
 import type { ChatMessage } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -28,6 +29,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const plan = await getPlanSnapshot();
+  if (!plan) {
+    return new Response(
+      JSON.stringify({ error: "Not authenticated" }),
+      { status: 401, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
   let client;
   try {
     client = getGeminiClient();
@@ -40,7 +49,7 @@ export async function POST(request: NextRequest) {
   }
 
   const model = client.getGenerativeModel({
-    model: MODEL_NAME,
+    model: modelForTier(plan.tier),
     systemInstruction: INTERVIEW_SYSTEM_PROMPT,
   });
 

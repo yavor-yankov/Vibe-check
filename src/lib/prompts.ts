@@ -49,8 +49,43 @@ Respond with ONLY valid JSON (no markdown, no code fences) matching this exact s
   "roadmap": [
     { "title": "Step name", "detail": "1-sentence what to build", "estimate": "e.g. '1 weekend' or '1 week'" }
   ],
-  "mvpScope": ["3-6 bullet features that MUST be in v1, nothing more"]
+  "mvpScope": ["3-6 bullet features that MUST be in v1, nothing more"],
+  "insights": {
+    "marketSize": {
+      "range": "A rough size of the addressable market. Use $ ranges like '$50M–$200M' for a narrow niche or '$5B–$20B' for a large category. If truly unknowable, use 'Unknown — too niche to estimate'.",
+      "confidence": "low" | "medium" | "high",
+      "reasoning": "1-2 sentences grounding the estimate (who the buyer is, rough pricing, plausible user count)."
+    },
+    "fundingSignal": {
+      "totalRaisedInSpace": "Rough VC activity in the space, e.g. '>$500M across 10+ deals', '$0 — no VC activity', or 'A handful of seed rounds'.",
+      "notableRaises": [
+        { "company": "Company name", "amount": "$10M" | "undisclosed", "year": "2023", "stage": "Series A" }
+      ],
+      "summary": "1 sentence on what the funding pattern tells us about the space (crowded/open/dead)."
+    },
+    "graveyard": [
+      { "name": "Dead competitor name", "year": "2021", "reason": "1 sentence on why it failed (distribution, unit economics, acquired-and-killed, etc.)" }
+    ],
+    "buildEffort": {
+      "bucket": "weekend" | "1-2 weeks" | "1-3 months" | "3-6 months" | "6+ months",
+      "teamSize": "e.g. '1 solo dev', '2 engineers + designer', 'Needs an ML engineer'",
+      "headlineRisk": "The single hardest technical or operational blocker. 1 sentence, specific."
+    },
+    "regulatoryFlags": [
+      { "domain": "GDPR" | "HIPAA" | "COPPA" | "FINRA" | "FDA" | "KYC/AML" | "SOC2" | "Accessibility (WCAG)" | "App Store policy" | etc., "severity": "low" | "medium" | "high", "note": "1 sentence on why this applies to THIS idea" }
+    ],
+    "pricingBenchmarks": [
+      { "competitor": "App name", "freeTier": "e.g. '5/month' or 'No free tier'", "paidTier": "e.g. '$9/mo Pro, $89/yr'", "model": "freemium" | "subscription" | "one-time" | "usage-based" | "free" }
+    ]
+  }
 }
+
+Insights guidance:
+- Ground market size, funding signal, graveyard, and pricing benchmarks in the competitor list provided. If the list is empty or vague, say so honestly instead of inventing companies.
+- Never fabricate specific dollar figures, dates, or company names. If unsure, use "undisclosed" / "unknown" / omit the row. Better to return 2 honest entries than 5 hallucinated ones.
+- graveyard: 0–5 entries. Skip if you can't name a real dead predecessor.
+- regulatoryFlags: 0–5 entries. Only include what actually applies (not every app is HIPAA).
+- pricingBenchmarks: 0–5 entries pulled from competitors in the list. Omit competitors whose pricing you don't know.
 
 Scoring rubric:
 - viability: can a solo/small team actually build and sustain this? (tech feasibility, cost, legal)
