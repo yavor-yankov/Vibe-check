@@ -15,12 +15,14 @@ import type {
   RedTeamReport,
   Session,
 } from "@/lib/types";
+import { loadSessions as loadLocalSessions, newSession } from "@/lib/storage";
 import {
-  deleteSession,
-  loadSessions,
-  newSession,
-  upsertSession,
-} from "@/lib/storage";
+  deleteSessionRemote,
+  fetchSessions,
+  persistSession,
+} from "@/lib/client/sessions-api";
+
+const MIGRATION_FLAG = "vibe-check-migrated-v1";
 
 export default function Home() {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -29,6 +31,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [isRedTeamLoading, setIsRedTeamLoading] = useState(false);
   const [redTeamError, setRedTeamError] = useState<string | null>(null);
+  const [isHydrated, setIsHydrated] = useState(false);
 
   // Keep a ref to the latest active session so async callbacks don't
   // act on stale closures (e.g. runRedTeam finishing after the user
@@ -37,21 +40,103 @@ export default function Home() {
   useEffect(() => {
     currentRef.current = current;
   }, [current]);
-
-  // hydrate from localStorage on mount (client-only)
-  /* eslint-disable react-hooks/set-state-in-effect */
+  // Mirrors `sessions` so async callbacks (e.g. runRedTeam returning
+  // after a session switch) can find a target session by id without
+  // needing a re-fetch from the server.
+  const sessionsRef = useRef<Session[]>([]);
   useEffect(() => {
-    const all = loadSessions();
-    setSessions(all);
-    setCurrent(all[0] ?? newSession());
-  }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
+    sessionsRef.current = sessions;
+  }, [sessions]);
 
-  const persist = useCallback((s: Session) => {
-    const all = upsertSession(s);
-    setSessions(all);
-    setCurrent(s);
+  // Per-session write queue. `persistSession` does a non-atomic
+  // delete-then-insert on messages/competitors/etc., so two concurrent
+  // writes for the same session can interleave and wipe rows from the
+  // newer write. Chain every persist for a given session id onto the
+  // previous one so they execute strictly in order.
+  const persistQueueRef = useRef<Map<string, Promise<unknown>>>(new Map());
+
+  // Hydrate from Postgres on mount. If it's empty and the browser has
+  // legacy localStorage sessions, migrate them once.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        let remote = await fetchSessions();
+        // Always try the migration path — it's flag-guarded and persistSession
+        // is an idempotent upsert, so re-running won't duplicate. Skipping
+        // this when remote is non-empty would strand any half-migrated
+        // sessions from a previous failed attempt permanently in localStorage.
+        if (!cancelled) {
+          const existingIds = new Set(remote.map((s) => s.id));
+          const migrated = await migrateLocalStorageIfNeeded(existingIds);
+          if (migrated.length > 0) {
+            remote = [...remote, ...migrated].sort(
+              (a, b) => b.updatedAt - a.updatedAt
+            );
+          }
+        }
+        if (cancelled) return;
+        setSessions(remote);
+        setCurrent(remote[0] ?? newSession());
+      } catch (err) {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : "Failed to load sessions");
+        setCurrent(newSession());
+      } finally {
+        if (!cancelled) setIsHydrated(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  /**
+   * Write a session to the sessions list + server. If it matches the
+   * currently-active session we also update `current` so the UI reflects
+   * the change immediately. For async callbacks that fire after the user
+   * has switched to another session (e.g. a slow red-team response), pass
+   * `{ updateCurrent: false }` so we don't yank them back.
+   */
+  const persist = useCallback(
+    (s: Session, opts: { updateCurrent?: boolean } = {}) => {
+      const { updateCurrent = true } = opts;
+      const stamped: Session = { ...s, updatedAt: Date.now() };
+      if (updateCurrent) setCurrent(stamped);
+      setSessions((prev) => {
+        const idx = prev.findIndex((x) => x.id === stamped.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = stamped;
+          return next.sort((a, b) => b.updatedAt - a.updatedAt);
+        }
+        return [stamped, ...prev];
+      });
+      // Fire server write in the background, but chain it onto any
+      // in-flight write for the same session so concurrent calls never
+      // interleave inside upsertSessionFull.
+      const queue = persistQueueRef.current;
+      const prev = queue.get(stamped.id) ?? Promise.resolve();
+      const next = prev
+        .catch(() => {
+          /* previous write's error was already surfaced; don't chain-cancel */
+        })
+        .then(() => persistSession(stamped))
+        .catch((err) => {
+          setError(
+            err instanceof Error
+              ? `Save failed: ${err.message}`
+              : "Save failed"
+          );
+        })
+        .finally(() => {
+          // Only clear the tail if nothing newer has been chained on.
+          if (queue.get(stamped.id) === next) queue.delete(stamped.id);
+        });
+      queue.set(stamped.id, next);
+    },
+    []
+  );
 
   const resetRedTeamState = () => {
     setIsRedTeamLoading(false);
@@ -75,12 +160,38 @@ export default function Home() {
   };
 
   const handleDelete = (id: string) => {
-    const all = deleteSession(id);
-    setSessions(all);
-    if (current?.id === id) {
-      setCurrent(all[0] ?? newSession());
-      resetRedTeamState();
-    }
+    setSessions((prev) => {
+      const next = prev.filter((s) => s.id !== id);
+      // Pick the next-current session from the post-delete list inside
+      // the updater so we never read a stale `sessions` closure (a
+      // background persistSession could have queued an updater that
+      // reordered the list before this delete ran).
+      if (current?.id === id) {
+        setCurrent(next[0] ?? newSession());
+        resetRedTeamState();
+      }
+      return next;
+    });
+    // Chain the server DELETE onto any in-flight persist for this id so
+    // a queued upsert can't resurrect the session after the DELETE lands.
+    const queue = persistQueueRef.current;
+    const prev = queue.get(id) ?? Promise.resolve();
+    const next = prev
+      .catch(() => {
+        /* previous write's error was already surfaced */
+      })
+      .then(() => deleteSessionRemote(id))
+      .catch((err) => {
+        setError(
+          err instanceof Error
+            ? `Delete failed: ${err.message}`
+            : "Delete failed"
+        );
+      })
+      .finally(() => {
+        if (queue.get(id) === next) queue.delete(id);
+      });
+    queue.set(id, next);
   };
 
   const startInterview = async (seed: string) => {
@@ -235,8 +346,6 @@ export default function Home() {
     if (!current) return;
     setError(null);
     resetRedTeamState();
-    // Keep the prior report and competitors around so a failed re-run
-    // reverts cleanly to what the user had before.
     const originalSummary = current.ideaSummary;
     const scanning: Session = {
       ...current,
@@ -272,22 +381,18 @@ export default function Home() {
       if (!res.ok || !data.redTeam) {
         throw new Error(data.error || "Red-team pass failed");
       }
-      // Merge onto whatever's in storage for this id — don't clobber
-      // fields that may have changed (e.g. a concurrent refine).
-      const target = loadSessions().find((s) => s.id === sessionId);
+      // Look up the target by id in the in-memory sessions list so we
+      // can save the red-team result even if the user has switched away
+      // to another session while the request was in flight (it can take
+      // 10+ seconds). We only update `current` when the user is still
+      // on that session — otherwise we'd yank them back.
+      const target = sessionsRef.current.find((s) => s.id === sessionId);
       if (!target) return; // session was deleted
-      // Refine ran while we were in flight — the red-team is for a
-      // superseded report. Drop it; the user can re-open to re-run.
       if ((target.reportGeneration ?? 0) !== generationAtStart) return;
       const updated: Session = { ...target, redTeamReport: data.redTeam };
-      const all = upsertSession(updated);
-      setSessions(all);
-      if (currentRef.current?.id === sessionId) {
-        setCurrent(updated);
-      }
+      const stillActive = currentRef.current?.id === sessionId;
+      persist(updated, { updateCurrent: stillActive });
     } catch (err) {
-      // Only surface the error if the session + generation still match —
-      // otherwise the user has already moved on.
       const live = currentRef.current;
       if (
         live?.id === sessionId &&
@@ -307,7 +412,7 @@ export default function Home() {
     }
   };
 
-  if (!current) {
+  if (!isHydrated || !current) {
     return (
       <div className="flex-1 grid place-items-center text-[color:var(--muted)]">
         Loading…
@@ -365,4 +470,51 @@ export default function Home() {
       </main>
     </div>
   );
+}
+
+/**
+ * One-time localStorage → Postgres migration.
+ *
+ * If this browser has legacy sessions saved under `vibe-check-sessions-v1`
+ * and they haven't been uploaded yet, post them to `/api/sessions` so the
+ * user doesn't lose their history when we switch away from localStorage.
+ * Best-effort — failures are swallowed so the hard-wall sign-in UX still
+ * works for brand-new users.
+ *
+ * Skips any session whose id is already on the server. Without that guard,
+ * a retry on a partially-failed migration would `upsertSessionFull` the
+ * original localStorage snapshot over any edits the user has made since
+ * (messages, reports, etc.) — a silent destructive data loss.
+ */
+async function migrateLocalStorageIfNeeded(
+  existingIds: Set<string>
+): Promise<Session[]> {
+  if (typeof window === "undefined") return [];
+  if (window.localStorage.getItem(MIGRATION_FLAG)) return [];
+  const legacy = loadLocalSessions();
+  if (legacy.length === 0) {
+    window.localStorage.setItem(MIGRATION_FLAG, String(Date.now()));
+    return [];
+  }
+  const migrated: Session[] = [];
+  let skippedCount = 0;
+  for (const s of legacy) {
+    if (existingIds.has(s.id)) {
+      // Already on the server from a prior partial migration — skip so
+      // we don't overwrite post-migration edits with stale data.
+      skippedCount++;
+      continue;
+    }
+    try {
+      const saved = await persistSession(s);
+      migrated.push(saved);
+    } catch {
+      /* skip — keep legacy in localStorage for manual recovery */
+    }
+  }
+  if (migrated.length + skippedCount === legacy.length) {
+    window.localStorage.setItem(MIGRATION_FLAG, String(Date.now()));
+  }
+  migrated.sort((a, b) => b.updatedAt - a.updatedAt);
+  return migrated;
 }
