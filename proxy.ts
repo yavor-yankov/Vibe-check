@@ -10,6 +10,23 @@ function isPublicPath(pathname: string): boolean {
   );
 }
 
+/**
+ * Build a redirect response that preserves any session-refresh cookies
+ * Supabase wrote on the mutable `source` response. Without this, a
+ * redirect path silently drops freshly rotated auth cookies and the
+ * browser stays on an about-to-expire session.
+ */
+function redirectPreservingCookies(
+  target: URL,
+  source: NextResponse
+): NextResponse {
+  const redirect = NextResponse.redirect(target);
+  for (const cookie of source.cookies.getAll()) {
+    redirect.cookies.set(cookie);
+  }
+  return redirect;
+}
+
 export async function proxy(request: NextRequest) {
   const { supabase, response } = createSupabaseProxyClient(request);
 
@@ -24,7 +41,7 @@ export async function proxy(request: NextRequest) {
   if (isPublicPath(pathname)) {
     // Bounce signed-in users away from /signin to the app root.
     if (user && pathname.startsWith("/signin")) {
-      return NextResponse.redirect(new URL("/", request.url));
+      return redirectPreservingCookies(new URL("/", request.url), response);
     }
     return response;
   }
@@ -34,7 +51,7 @@ export async function proxy(request: NextRequest) {
     if (pathname !== "/") {
       signinUrl.searchParams.set("next", `${pathname}${search}`);
     }
-    return NextResponse.redirect(signinUrl);
+    return redirectPreservingCookies(signinUrl, response);
   }
 
   return response;

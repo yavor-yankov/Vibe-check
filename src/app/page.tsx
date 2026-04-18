@@ -115,12 +115,18 @@ export default function Home() {
   };
 
   const handleDelete = (id: string) => {
-    setSessions((prev) => prev.filter((s) => s.id !== id));
-    if (current?.id === id) {
-      const remaining = sessions.filter((s) => s.id !== id);
-      setCurrent(remaining[0] ?? newSession());
-      resetRedTeamState();
-    }
+    setSessions((prev) => {
+      const next = prev.filter((s) => s.id !== id);
+      // Pick the next-current session from the post-delete list inside
+      // the updater so we never read a stale `sessions` closure (a
+      // background persistSession could have queued an updater that
+      // reordered the list before this delete ran).
+      if (current?.id === id) {
+        setCurrent(next[0] ?? newSession());
+        resetRedTeamState();
+      }
+      return next;
+    });
     void deleteSessionRemote(id).catch((err) => {
       setError(
         err instanceof Error
