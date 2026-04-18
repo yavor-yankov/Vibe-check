@@ -3,20 +3,30 @@
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   ExternalLink,
+  Flame,
   Layers,
   Map,
+  Pencil,
   RotateCcw,
   Sparkles,
   Target,
 } from "lucide-react";
-import type { AnalysisReport, Competitor } from "@/lib/types";
+import { useState } from "react";
+import type { AnalysisReport, Competitor, RedTeamReport } from "@/lib/types";
 
 interface ReportStageProps {
   report: AnalysisReport;
   competitors: Competitor[];
   ideaSummary: string;
+  redTeamReport?: RedTeamReport | null;
+  isRedTeamLoading?: boolean;
+  redTeamError?: string | null;
   onRestart: () => void;
+  onRefine: (newSummary: string) => void;
+  onRedTeam: () => void;
 }
 
 const VERDICT_STYLES: Record<
@@ -73,9 +83,31 @@ export default function ReportStage({
   report,
   competitors,
   ideaSummary,
+  redTeamReport,
+  isRedTeamLoading,
+  redTeamError,
   onRestart,
+  onRefine,
+  onRedTeam,
 }: ReportStageProps) {
   const verdict = VERDICT_STYLES[report.verdict] ?? VERDICT_STYLES.iterate;
+  const [refineOpen, setRefineOpen] = useState(false);
+  const [refineDraft, setRefineDraft] = useState(ideaSummary);
+  const [redTeamOpen, setRedTeamOpen] = useState(false);
+
+  function submitRefine() {
+    const trimmed = refineDraft.trim();
+    if (!trimmed || trimmed === ideaSummary.trim()) return;
+    setRefineOpen(false);
+    onRefine(trimmed);
+  }
+
+  function handleRedTeamClick() {
+    if (!redTeamReport && !isRedTeamLoading) {
+      onRedTeam();
+    }
+    setRedTeamOpen((v) => !v);
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-10 fade-in-up space-y-8">
@@ -89,14 +121,61 @@ export default function ReportStage({
           </h1>
           <p className="text-[color:var(--muted)] max-w-2xl">{report.summary}</p>
         </div>
-        <button
-          onClick={onRestart}
-          className="shrink-0 inline-flex items-center gap-2 rounded-lg border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[color:var(--card)] transition"
-        >
-          <RotateCcw size={14} />
-          New check
-        </button>
+        <div className="shrink-0 flex items-center gap-2">
+          <button
+            onClick={() => {
+              setRefineDraft(ideaSummary);
+              setRefineOpen((v) => !v);
+            }}
+            className="inline-flex items-center gap-2 rounded-lg border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[color:var(--card)] transition"
+          >
+            <Pencil size={14} />
+            Refine & re-score
+          </button>
+          <button
+            onClick={onRestart}
+            className="inline-flex items-center gap-2 rounded-lg border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[color:var(--card)] transition"
+          >
+            <RotateCcw size={14} />
+            New check
+          </button>
+        </div>
       </div>
+
+      {refineOpen && (
+        <section className="rounded-xl border border-[color:var(--accent)]/40 bg-[color:var(--accent)]/5 p-5 space-y-3">
+          <div className="text-sm font-medium">Tweak the pitch and re-run</div>
+          <div className="text-xs text-[color:var(--muted)]">
+            Edit the idea summary below. I&apos;ll re-search competitors and
+            re-score in place — your interview history stays put.
+          </div>
+          <textarea
+            value={refineDraft}
+            onChange={(e) => setRefineDraft(e.target.value)}
+            rows={4}
+            className="w-full resize-y rounded-lg border border-[color:var(--border)] bg-[color:var(--background)] px-3 py-2 text-sm focus:outline-none focus:border-[color:var(--accent)] focus:ring-2 focus:ring-[color:var(--accent)]/20"
+          />
+          <div className="flex items-center justify-end gap-2">
+            <button
+              onClick={() => setRefineOpen(false)}
+              className="rounded-lg px-3 py-1.5 text-sm text-[color:var(--muted)] hover:text-[color:var(--foreground)] transition"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={submitRefine}
+              disabled={
+                !refineDraft.trim() ||
+                refineDraft.trim() === ideaSummary.trim()
+              }
+              className="inline-flex items-center gap-2 rounded-lg bg-[color:var(--accent)] text-white px-4 py-1.5 text-sm font-medium hover:brightness-110 transition disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Sparkles size={14} />
+              Re-score
+            </button>
+          </div>
+        </section>
+      )}
 
       <div
         className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium ${verdict.bg} ${verdict.text}`}
@@ -274,6 +353,82 @@ export default function ReportStage({
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="rounded-xl border border-[color:var(--bad)]/30 bg-[color:var(--bad)]/5 p-6">
+        <button
+          type="button"
+          onClick={handleRedTeamClick}
+          className="w-full flex items-center justify-between gap-2 text-left"
+        >
+          <div className="flex items-center gap-2">
+            <Flame size={18} className="text-[color:var(--bad)]" />
+            <h2 className="text-lg font-semibold">Devil&apos;s advocate</h2>
+            <span className="text-xs text-[color:var(--muted)] font-normal">
+              — the reasons not to build this
+            </span>
+          </div>
+          {redTeamOpen ? (
+            <ChevronUp size={18} className="text-[color:var(--muted)]" />
+          ) : (
+            <ChevronDown size={18} className="text-[color:var(--muted)]" />
+          )}
+        </button>
+
+        {redTeamOpen && (
+          <div className="mt-4 space-y-4">
+            {isRedTeamLoading && (
+              <div className="text-sm text-[color:var(--muted)]">
+                Running the red-team pass…
+              </div>
+            )}
+            {redTeamError && (
+              <div className="text-sm text-[color:var(--bad)]">
+                {redTeamError}
+              </div>
+            )}
+            {redTeamReport && (
+              <>
+                <div className="rounded-lg border border-[color:var(--bad)]/30 bg-[color:var(--background)] p-4">
+                  <div className="text-xs uppercase tracking-wider text-[color:var(--bad)] font-medium mb-1">
+                    Verdict
+                  </div>
+                  <div className="text-sm font-medium">
+                    {redTeamReport.verdict}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-[color:var(--muted)] font-medium mb-2">
+                    Reasons not to build
+                  </div>
+                  <ul className="space-y-2 text-sm">
+                    {redTeamReport.reasons.map((r, i) => (
+                      <li key={i} className="flex gap-2">
+                        <span className="text-[color:var(--bad)] mt-0.5">×</span>
+                        <span>{r}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-[color:var(--muted)] font-medium mb-2">
+                    Silent killers
+                  </div>
+                  <ul className="space-y-2 text-sm">
+                    {redTeamReport.silentKillers.map((s, i) => (
+                      <li key={i} className="flex gap-2">
+                        <span className="text-[color:var(--warn)] mt-0.5">
+                          ⚠
+                        </span>
+                        <span>{s}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </section>
 
       <div className="text-center text-xs text-[color:var(--muted)] pt-4">

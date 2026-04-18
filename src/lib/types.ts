@@ -49,6 +49,12 @@ export interface AnalysisReport {
   mvpScope: string[];
 }
 
+export interface RedTeamReport {
+  verdict: string;
+  reasons: string[];
+  silentKillers: string[];
+}
+
 export type WizardStage = "intro" | "interview" | "scanning" | "report";
 
 export interface Session {
@@ -61,4 +67,5 @@ export interface Session {
   competitors: Competitor[];
   report: AnalysisReport | null;
   ideaSummary?: string;
+  redTeamReport?: RedTeamReport | null;
 }

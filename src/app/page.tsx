@@ -9,7 +9,12 @@ import InterviewStage, {
 import ScanningStage from "@/components/ScanningStage";
 import ReportStage from "@/components/ReportStage";
 import Sidebar from "@/components/Sidebar";
-import type { AnalysisReport, ChatMessage, Session } from "@/lib/types";
+import type {
+  AnalysisReport,
+  ChatMessage,
+  RedTeamReport,
+  Session,
+} from "@/lib/types";
 import {
   deleteSession,
   loadSessions,
@@ -22,6 +27,8 @@ export default function Home() {
   const [current, setCurrent] = useState<Session | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isRedTeamLoading, setIsRedTeamLoading] = useState(false);
+  const [redTeamError, setRedTeamError] = useState<string | null>(null);
 
   // hydrate from localStorage on mount (client-only)
   /* eslint-disable react-hooks/set-state-in-effect */
@@ -131,17 +138,11 @@ export default function Home() {
     }
   };
 
-  const runAnalysis = async (ideaSummary: string) => {
-    if (!current) return;
-    setError(null);
-
-    const scanning: Session = {
-      ...current,
-      stage: "scanning",
-      ideaSummary,
-    };
-    persist(scanning);
-
+  const analyze = async (
+    scanning: Session,
+    revertStage: Session["stage"]
+  ) => {
+    const ideaSummary = scanning.ideaSummary ?? "";
     try {
       // 1. search competitors
       const searchRes = await fetch("/api/search", {
@@ -163,7 +164,7 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: current.messages,
+          messages: scanning.messages,
           ideaSummary,
           competitors,
         }),
@@ -181,13 +182,75 @@ export default function Home() {
         stage: "report",
         competitors,
         report: analyzeData.report,
+        // Refining invalidates the prior red-team pass — force re-run.
+        redTeamReport: null,
       };
       persist(done);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       setError(msg);
-      // revert to interview so user can try again
-      persist({ ...current, stage: "interview" });
+      // revert so the user can retry from a sensible stage
+      persist({ ...scanning, stage: revertStage });
+    }
+  };
+
+  const runAnalysis = async (ideaSummary: string) => {
+    if (!current) return;
+    setError(null);
+    const scanning: Session = {
+      ...current,
+      stage: "scanning",
+      ideaSummary,
+    };
+    persist(scanning);
+    await analyze(scanning, "interview");
+  };
+
+  const refineAnalysis = async (newSummary: string) => {
+    if (!current) return;
+    setError(null);
+    setRedTeamError(null);
+    const prevReport = current.report;
+    const scanning: Session = {
+      ...current,
+      stage: "scanning",
+      ideaSummary: newSummary,
+      competitors: [],
+      // keep the prior report around so we can revert on failure
+      report: prevReport,
+    };
+    persist(scanning);
+    await analyze(scanning, "report");
+  };
+
+  const runRedTeam = async () => {
+    if (!current || !current.report) return;
+    setRedTeamError(null);
+    setIsRedTeamLoading(true);
+    try {
+      const res = await fetch("/api/redteam", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ideaSummary: current.ideaSummary ?? "",
+          messages: current.messages,
+          competitors: current.competitors,
+          report: current.report,
+        }),
+      });
+      const data = (await res.json()) as {
+        redTeam?: RedTeamReport;
+        error?: string;
+      };
+      if (!res.ok || !data.redTeam) {
+        throw new Error(data.error || "Red-team pass failed");
+      }
+      persist({ ...current, redTeamReport: data.redTeam });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setRedTeamError(msg);
+    } finally {
+      setIsRedTeamLoading(false);
     }
   };
 
@@ -237,7 +300,12 @@ export default function Home() {
             report={current.report}
             competitors={current.competitors}
             ideaSummary={current.ideaSummary ?? ""}
+            redTeamReport={current.redTeamReport ?? null}
+            isRedTeamLoading={isRedTeamLoading}
+            redTeamError={redTeamError}
             onRestart={handleNew}
+            onRefine={refineAnalysis}
+            onRedTeam={runRedTeam}
           />
         )}
       </main>
