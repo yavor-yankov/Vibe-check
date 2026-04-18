@@ -48,10 +48,18 @@ export default function Home() {
     (async () => {
       try {
         let remote = await fetchSessions();
-        if (!cancelled && remote.length === 0) {
+        // Always try the migration path — it's flag-guarded and persistSession
+        // is an idempotent upsert, so re-running won't duplicate. Skipping
+        // this when remote is non-empty would strand any half-migrated
+        // sessions from a previous failed attempt permanently in localStorage.
+        if (!cancelled) {
           const migrated = await migrateLocalStorageIfNeeded();
           if (migrated.length > 0) {
-            remote = migrated;
+            const byId = new Map(remote.map((s) => [s.id, s]));
+            for (const s of migrated) byId.set(s.id, s);
+            remote = Array.from(byId.values()).sort(
+              (a, b) => b.updatedAt - a.updatedAt
+            );
           }
         }
         if (cancelled) return;
