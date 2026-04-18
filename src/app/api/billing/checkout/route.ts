@@ -54,18 +54,48 @@ export async function POST(request: Request) {
 
   let customerId = row?.stripe_customer_id ?? null;
   if (!customerId) {
-    const customer = await stripe.customers.create({
-      email: row?.email ?? user.email ?? undefined,
-      metadata: { supabase_user_id: user.id },
-    });
+    // Use the Supabase user id as an idempotency key so two concurrent
+    // POST /api/billing/checkout requests don't create two Stripe
+    // customers for the same user; Stripe returns the same customer
+    // for any duplicate call within 24h.
+    const customer = await stripe.customers.create(
+      {
+        email: row?.email ?? user.email ?? undefined,
+        metadata: { supabase_user_id: user.id },
+      },
+      { idempotencyKey: `customer:${user.id}` }
+    );
     customerId = customer.id;
-    // Write back via the admin client so we don't need an RLS policy
-    // update that would expose customer ids to the user themselves.
+    // Conditional write via the admin client: only the first concurrent
+    // request wins. If another request already stamped a customer id
+    // we re-read and reuse it so the checkout session is linked to the
+    // customer id that's actually stored in the DB (otherwise the
+    // webhook lookup .eq(stripe_customer_id, …) would miss and the
+    // user would pay without getting upgraded).
     const admin = createSupabaseAdminClient();
-    await admin
+    const { data: updated, error: updateErr } = await admin
       .from("users")
       .update({ stripe_customer_id: customerId })
-      .eq("id", user.id);
+      .eq("id", user.id)
+      .is("stripe_customer_id", null)
+      .select("stripe_customer_id")
+      .maybeSingle();
+    if (updateErr) {
+      return NextResponse.json(
+        { error: updateErr.message },
+        { status: 500 }
+      );
+    }
+    if (!updated) {
+      const { data: reread } = await admin
+        .from("users")
+        .select("stripe_customer_id")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (reread?.stripe_customer_id) {
+        customerId = reread.stripe_customer_id;
+      }
+    }
   }
 
   const origin = new URL(request.url).origin;

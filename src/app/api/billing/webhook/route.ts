@@ -114,10 +114,21 @@ export async function POST(request: Request) {
                 : null,
           })
           .eq("stripe_customer_id", customerId);
+        // Stripe emits a stream of statuses across the sub lifecycle;
+        // past_due / trialing are "still paying / still entitled" and
+        // must NOT demote a Pro user mid-grace-period. canceled /
+        // incomplete_expired / unpaid are real demotions.
+        const entitledStatuses = new Set([
+          "active",
+          "trialing",
+          "past_due",
+        ]);
         await admin
           .from("users")
           .update({
-            subscription_tier: sub.status === "active" ? "pro" : "free",
+            subscription_tier: entitledStatuses.has(sub.status)
+              ? "pro"
+              : "free",
           })
           .eq("stripe_customer_id", customerId)
           .neq("subscription_tier", "lifetime");
