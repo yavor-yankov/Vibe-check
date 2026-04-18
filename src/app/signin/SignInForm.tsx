@@ -14,8 +14,15 @@ type Status =
 export default function SignInForm() {
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/";
+  // Surface errors the callback route bounces back with (`?error=...`)
+  // so OAuth / code-exchange failures aren't silently swallowed.
+  const callbackError = searchParams.get("error");
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<Status>({ kind: "idle" });
+  const [status, setStatus] = useState<Status>(
+    callbackError
+      ? { kind: "error", message: callbackError }
+      : { kind: "idle" }
+  );
   const [googleLoading, setGoogleLoading] = useState(false);
 
   const callbackUrl = (extra: string) =>
