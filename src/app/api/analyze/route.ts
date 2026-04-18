@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
-import { getGeminiClient, MODEL_NAME } from "@/lib/gemini";
+import { getGeminiClient, modelForTier } from "@/lib/gemini";
 import { ANALYSIS_SYSTEM_PROMPT } from "@/lib/prompts";
+import { consumeUsage, refundUsage } from "@/lib/billing/usage";
 import type {
   AnalysisReport,
   ChatMessage,
@@ -44,12 +45,39 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Resolve the Gemini client FIRST so a missing API key never burns a
+  // quota slot. Only once we know the downstream call is reachable do we
+  // consume a check.
   let client;
   try {
     client = getGeminiClient();
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Gemini not configured";
     return Response.json({ error: msg }, { status: 500 });
+  }
+
+  // Quota + plan gate — a successful analyze counts as "one vibe check"
+  // against the monthly budget. Quota errors surface as 402 so the client
+  // can show the upgrade CTA without treating it like a server crash.
+  let plan;
+  try {
+    plan = await consumeUsage();
+  } catch (err) {
+    const e = err as Error & { code?: string; message?: string };
+    if (e.code === "QUOTA_EXCEEDED") {
+      return Response.json({ error: e.message }, { status: 402 });
+    }
+    // Only surface 401 when the caller truly isn't signed in. Supabase
+    // PostgrestErrors aren't instanceof Error but do carry a .message;
+    // treating them as 401 hides real database failures from operators
+    // and triggers misleading sign-in redirects on the client.
+    const isAuthError =
+      e instanceof Error && e.message === "Not authenticated";
+    const msg = e.message ?? "Unknown billing error";
+    return Response.json(
+      { error: msg },
+      { status: isAuthError ? 401 : 500 }
+    );
   }
 
   const transcript = (messages ?? [])
@@ -69,7 +97,7 @@ export async function POST(request: NextRequest) {
   const userPrompt = `# Idea summary\n${ideaSummary}\n\n# Interview transcript\n${transcript}\n\n# Competitors found on the web\n${competitorBlock}\n\nReturn ONLY the JSON described in your instructions.`;
 
   const model = client.getGenerativeModel({
-    model: MODEL_NAME,
+    model: modelForTier(plan.tier),
     systemInstruction: ANALYSIS_SYSTEM_PROMPT,
     generationConfig: {
       responseMimeType: "application/json",
@@ -84,6 +112,9 @@ export async function POST(request: NextRequest) {
     const report = JSON.parse(jsonStr) as AnalysisReport;
     return Response.json({ report });
   } catch (err) {
+    // Analysis failed after we already charged the user — roll the slot
+    // back so transient Gemini errors don't eat free-tier quota.
+    await refundUsage(plan.userId, plan.usageMonth);
     const msg = err instanceof Error ? err.message : "analysis failed";
     return Response.json(
       { error: `Failed to generate analysis: ${msg}` },

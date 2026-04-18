@@ -11,6 +11,16 @@ export type Verdict = "build_it" | "iterate" | "rethink" | "skip";
 
 type EmptyRelationships = [];
 
+type SessionFkRelationship<Name extends string> = [
+  {
+    foreignKeyName: Name;
+    columns: ["session_id"];
+    isOneToOne: false;
+    referencedRelation: "sessions";
+    referencedColumns: ["id"];
+  }
+];
+
 export interface Database {
   public: {
     Tables: {
@@ -20,6 +30,12 @@ export interface Database {
           email: string;
           subscription_tier: SubscriptionTier;
           stripe_customer_id: string | null;
+          stripe_subscription_id: string | null;
+          stripe_price_id: string | null;
+          subscription_status: string | null;
+          current_period_end: string | null;
+          usage_month: string | null;
+          usage_count: number;
           created_at: string;
           updated_at: string;
         };
@@ -28,11 +44,45 @@ export interface Database {
           email: string;
           subscription_tier?: SubscriptionTier;
           stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
+          stripe_price_id?: string | null;
+          subscription_status?: string | null;
+          current_period_end?: string | null;
+          usage_month?: string | null;
+          usage_count?: number;
         };
         Update: {
           email?: string;
           subscription_tier?: SubscriptionTier;
           stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
+          stripe_price_id?: string | null;
+          subscription_status?: string | null;
+          current_period_end?: string | null;
+          usage_month?: string | null;
+          usage_count?: number;
+        };
+        Relationships: EmptyRelationships;
+      };
+      tavily_cache: {
+        Row: {
+          query_key: string;
+          query: string;
+          response: unknown;
+          created_at: string;
+          expires_at: string;
+        };
+        Insert: {
+          query_key: string;
+          query: string;
+          response: unknown;
+          created_at?: string;
+          expires_at?: string;
+        };
+        Update: {
+          query?: string;
+          response?: unknown;
+          expires_at?: string;
         };
         Relationships: EmptyRelationships;
       };
@@ -81,7 +131,7 @@ export interface Database {
         Update: {
           content?: string;
         };
-        Relationships: EmptyRelationships;
+        Relationships: SessionFkRelationship<"messages_session_id_fkey">;
       };
       competitors: {
         Row: {
@@ -104,7 +154,7 @@ export interface Database {
           url?: string;
           snippet?: string | null;
         };
-        Relationships: EmptyRelationships;
+        Relationships: SessionFkRelationship<"competitors_session_id_fkey">;
       };
       reports: {
         Row: {
@@ -149,7 +199,7 @@ export interface Database {
           roadmap?: Array<{ title: string; detail: string; estimate: string }>;
           mvp_scope?: string[];
         };
-        Relationships: EmptyRelationships;
+        Relationships: SessionFkRelationship<"reports_session_id_fkey">;
       };
       red_team_reports: {
         Row: {
@@ -175,11 +225,28 @@ export interface Database {
           silent_killers?: string[];
           report_generation?: number;
         };
-        Relationships: EmptyRelationships;
+        Relationships: SessionFkRelationship<"red_team_reports_session_id_fkey">;
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      increment_usage: {
+        Args: {
+          p_user_id: string;
+          p_month: string;
+          p_unlimited: boolean;
+          p_monthly_quota: number;
+        };
+        Returns: number;
+      };
+      decrement_usage: {
+        Args: {
+          p_user_id: string;
+          p_month: string;
+        };
+        Returns: number;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

@@ -1,6 +1,11 @@
 import { NextRequest } from "next/server";
-import { getGeminiClient, MODEL_NAME } from "@/lib/gemini";
+import { getGeminiClient, modelForTier } from "@/lib/gemini";
 import { SEARCH_QUERY_SYSTEM_PROMPT } from "@/lib/prompts";
+import { getPlanSnapshot } from "@/lib/billing/usage";
+import {
+  readCachedSearch,
+  writeCachedSearch,
+} from "@/lib/billing/tavily-cache";
 import type { Competitor } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -20,11 +25,14 @@ interface TavilyResponse {
   results?: TavilyResult[];
 }
 
-async function generateSearchQueries(ideaSummary: string): Promise<string[]> {
+async function generateSearchQueries(
+  ideaSummary: string,
+  modelName: string
+): Promise<string[]> {
   try {
     const client = getGeminiClient();
     const model = client.getGenerativeModel({
-      model: MODEL_NAME,
+      model: modelName,
       systemInstruction: SEARCH_QUERY_SYSTEM_PROMPT,
     });
     const result = await model.generateContent(ideaSummary);
@@ -116,13 +124,35 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const queries = await generateSearchQueries(ideaSummary);
+  const plan = await getPlanSnapshot();
+  if (!plan) {
+    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const queries = await generateSearchQueries(
+    ideaSummary,
+    modelForTier(plan.tier)
+  );
   const tavilyKey = process.env.TAVILY_API_KEY;
 
   const seen = new Set<string>();
   const competitors: Competitor[] = [];
+  let cachedQueries = 0;
 
   for (const q of queries) {
+    // Cache lookup first — a hit skips both Tavily and DuckDuckGo.
+    const cached = await readCachedSearch(q);
+    if (cached) {
+      cachedQueries++;
+      for (const c of cached) {
+        if (!seen.has(c.url)) {
+          seen.add(c.url);
+          competitors.push(c);
+        }
+      }
+      continue;
+    }
+
     let batch: Competitor[] = [];
     try {
       if (tavilyKey) {
@@ -141,6 +171,10 @@ export async function POST(request: NextRequest) {
         }
       }
     }
+    if (batch.length > 0) {
+      // Only cache successful live calls. Failures shouldn't be memoized.
+      void writeCachedSearch(q, batch);
+    }
     for (const c of batch) {
       if (!seen.has(c.url)) {
         seen.add(c.url);
@@ -153,5 +187,6 @@ export async function POST(request: NextRequest) {
     queries,
     competitors: competitors.slice(0, 10),
     provider: tavilyKey ? "tavily" : "duckduckgo",
+    cacheHits: cachedQueries,
   });
 }
