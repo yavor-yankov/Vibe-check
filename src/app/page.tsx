@@ -48,6 +48,13 @@ export default function Home() {
     sessionsRef.current = sessions;
   }, [sessions]);
 
+  // Per-session write queue. `persistSession` does a non-atomic
+  // delete-then-insert on messages/competitors/etc., so two concurrent
+  // writes for the same session can interleave and wipe rows from the
+  // newer write. Chain every persist for a given session id onto the
+  // previous one so they execute strictly in order.
+  const persistQueueRef = useRef<Map<string, Promise<unknown>>>(new Map());
+
   // Hydrate from Postgres on mount. If it's empty and the browser has
   // legacy localStorage sessions, migrate them once.
   useEffect(() => {
@@ -105,15 +112,28 @@ export default function Home() {
         }
         return [stamped, ...prev];
       });
-      // Fire server write in the background. We don't block the UI on it,
-      // but surface errors so the user knows persistence failed.
-      void persistSession(stamped).catch((err) => {
-        setError(
-          err instanceof Error
-            ? `Save failed: ${err.message}`
-            : "Save failed"
-        );
-      });
+      // Fire server write in the background, but chain it onto any
+      // in-flight write for the same session so concurrent calls never
+      // interleave inside upsertSessionFull.
+      const queue = persistQueueRef.current;
+      const prev = queue.get(stamped.id) ?? Promise.resolve();
+      const next = prev
+        .catch(() => {
+          /* previous write's error was already surfaced; don't chain-cancel */
+        })
+        .then(() => persistSession(stamped))
+        .catch((err) => {
+          setError(
+            err instanceof Error
+              ? `Save failed: ${err.message}`
+              : "Save failed"
+          );
+        })
+        .finally(() => {
+          // Only clear the tail if nothing newer has been chained on.
+          if (queue.get(stamped.id) === next) queue.delete(stamped.id);
+        });
+      queue.set(stamped.id, next);
     },
     []
   );
