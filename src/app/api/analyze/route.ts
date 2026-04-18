@@ -1,10 +1,12 @@
 import { NextRequest } from "next/server";
-import { getGeminiClient, MODEL_NAME } from "@/lib/gemini";
+import { getGeminiClient, modelForTier } from "@/lib/gemini";
 import { ANALYSIS_SYSTEM_PROMPT } from "@/lib/prompts";
+import { consumeUsage, refundUsage } from "@/lib/billing/usage";
 import type {
   AnalysisReport,
   ChatMessage,
   Competitor,
+  ExpandedInsights,
 } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -13,6 +15,130 @@ interface AnalyzeRequestBody {
   messages: ChatMessage[];
   ideaSummary: string;
   competitors: Competitor[];
+}
+
+// Strip `insights` entirely if the model returned a malformed payload.
+// We'd rather render the original report cleanly than explode the UI on
+// half-formed expanded insights.
+const BUILD_EFFORT_BUCKETS: ReadonlyArray<ExpandedInsights["buildEffort"]["bucket"]> = [
+  "weekend",
+  "1-2 weeks",
+  "1-3 months",
+  "3-6 months",
+  "6+ months",
+];
+const PRICING_MODELS: ReadonlyArray<
+  ExpandedInsights["pricingBenchmarks"][number]["model"]
+> = ["freemium", "subscription", "one-time", "usage-based", "free"];
+
+function sanitizeInsights(
+  raw: unknown
+): ExpandedInsights | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const r = raw as Record<string, unknown>;
+
+  const ms = r.marketSize as Record<string, unknown> | undefined;
+  const fs = r.fundingSignal as Record<string, unknown> | undefined;
+  const be = r.buildEffort as Record<string, unknown> | undefined;
+
+  if (!ms || typeof ms.range !== "string" || typeof ms.reasoning !== "string") {
+    return undefined;
+  }
+  if (
+    !fs ||
+    typeof fs.totalRaisedInSpace !== "string" ||
+    typeof fs.summary !== "string"
+  ) {
+    return undefined;
+  }
+  if (
+    !be ||
+    typeof be.bucket !== "string" ||
+    !BUILD_EFFORT_BUCKETS.includes(
+      be.bucket as ExpandedInsights["buildEffort"]["bucket"]
+    ) ||
+    typeof be.teamSize !== "string" ||
+    typeof be.headlineRisk !== "string"
+  ) {
+    return undefined;
+  }
+
+  const confidence =
+    ms.confidence === "low" || ms.confidence === "medium" || ms.confidence === "high"
+      ? ms.confidence
+      : "medium";
+
+  const notableRaises = Array.isArray(fs.notableRaises)
+    ? fs.notableRaises.filter(
+        (x): x is ExpandedInsights["fundingSignal"]["notableRaises"][number] =>
+          !!x &&
+          typeof x === "object" &&
+          typeof (x as Record<string, unknown>).company === "string" &&
+          typeof (x as Record<string, unknown>).amount === "string" &&
+          typeof (x as Record<string, unknown>).year === "string"
+      )
+    : [];
+
+  const graveyard = Array.isArray(r.graveyard)
+    ? r.graveyard.filter(
+        (x): x is ExpandedInsights["graveyard"][number] =>
+          !!x &&
+          typeof x === "object" &&
+          typeof (x as Record<string, unknown>).name === "string" &&
+          typeof (x as Record<string, unknown>).year === "string" &&
+          typeof (x as Record<string, unknown>).reason === "string"
+      )
+    : [];
+
+  const regulatoryFlags = Array.isArray(r.regulatoryFlags)
+    ? r.regulatoryFlags.filter(
+        (x): x is ExpandedInsights["regulatoryFlags"][number] =>
+          !!x &&
+          typeof x === "object" &&
+          typeof (x as Record<string, unknown>).domain === "string" &&
+          typeof (x as Record<string, unknown>).note === "string" &&
+          ["low", "medium", "high"].includes(
+            String((x as Record<string, unknown>).severity)
+          )
+      )
+    : [];
+
+  const pricingBenchmarks = Array.isArray(r.pricingBenchmarks)
+    ? r.pricingBenchmarks.filter(
+        (x): x is ExpandedInsights["pricingBenchmarks"][number] =>
+          !!x &&
+          typeof x === "object" &&
+          typeof (x as Record<string, unknown>).competitor === "string" &&
+          typeof (x as Record<string, unknown>).freeTier === "string" &&
+          typeof (x as Record<string, unknown>).paidTier === "string" &&
+          typeof (x as Record<string, unknown>).model === "string" &&
+          PRICING_MODELS.includes(
+            (x as Record<string, unknown>)
+              .model as ExpandedInsights["pricingBenchmarks"][number]["model"]
+          )
+      )
+    : [];
+
+  return {
+    marketSize: {
+      range: ms.range,
+      confidence,
+      reasoning: ms.reasoning,
+    },
+    fundingSignal: {
+      totalRaisedInSpace: fs.totalRaisedInSpace,
+      summary: fs.summary,
+      notableRaises,
+    },
+    graveyard,
+    buildEffort: {
+      bucket: be.bucket as ExpandedInsights["buildEffort"]["bucket"],
+      teamSize: be.teamSize,
+      headlineRisk: be.headlineRisk,
+    },
+    regulatoryFlags,
+    pricingBenchmarks,
+  };
 }
 
 function extractJson(raw: string): string {
@@ -44,12 +170,39 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Resolve the Gemini client FIRST so a missing API key never burns a
+  // quota slot. Only once we know the downstream call is reachable do we
+  // consume a check.
   let client;
   try {
     client = getGeminiClient();
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Gemini not configured";
     return Response.json({ error: msg }, { status: 500 });
+  }
+
+  // Quota + plan gate — a successful analyze counts as "one vibe check"
+  // against the monthly budget. Quota errors surface as 402 so the client
+  // can show the upgrade CTA without treating it like a server crash.
+  let plan;
+  try {
+    plan = await consumeUsage();
+  } catch (err) {
+    const e = err as Error & { code?: string; message?: string };
+    if (e.code === "QUOTA_EXCEEDED") {
+      return Response.json({ error: e.message }, { status: 402 });
+    }
+    // Only surface 401 when the caller truly isn't signed in. Supabase
+    // PostgrestErrors aren't instanceof Error but do carry a .message;
+    // treating them as 401 hides real database failures from operators
+    // and triggers misleading sign-in redirects on the client.
+    const isAuthError =
+      e instanceof Error && e.message === "Not authenticated";
+    const msg = e.message ?? "Unknown billing error";
+    return Response.json(
+      { error: msg },
+      { status: isAuthError ? 401 : 500 }
+    );
   }
 
   const transcript = (messages ?? [])
@@ -69,7 +222,7 @@ export async function POST(request: NextRequest) {
   const userPrompt = `# Idea summary\n${ideaSummary}\n\n# Interview transcript\n${transcript}\n\n# Competitors found on the web\n${competitorBlock}\n\nReturn ONLY the JSON described in your instructions.`;
 
   const model = client.getGenerativeModel({
-    model: MODEL_NAME,
+    model: modelForTier(plan.tier),
     systemInstruction: ANALYSIS_SYSTEM_PROMPT,
     generationConfig: {
       responseMimeType: "application/json",
@@ -81,9 +234,18 @@ export async function POST(request: NextRequest) {
     const result = await model.generateContent(userPrompt);
     const raw = result.response.text();
     const jsonStr = extractJson(raw);
-    const report = JSON.parse(jsonStr) as AnalysisReport;
+    const parsed = JSON.parse(jsonStr) as AnalysisReport & {
+      insights?: unknown;
+    };
+    const report: AnalysisReport = {
+      ...parsed,
+      insights: sanitizeInsights(parsed.insights),
+    };
     return Response.json({ report });
   } catch (err) {
+    // Analysis failed after we already charged the user — roll the slot
+    // back so transient Gemini errors don't eat free-tier quota.
+    await refundUsage(plan.userId, plan.usageMonth);
     const msg = err instanceof Error ? err.message : "analysis failed";
     return Response.json(
       { error: `Failed to generate analysis: ${msg}` },

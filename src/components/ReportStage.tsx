@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import type { AnalysisReport, Competitor, RedTeamReport } from "@/lib/types";
+import InsightsPanel from "./InsightsPanel";
 
 interface ReportStageProps {
   report: AnalysisReport;
@@ -252,6 +253,8 @@ export default function ReportStage({
           </ul>
         </section>
       )}
+
+      {report.insights && <InsightsPanel insights={report.insights} />}
 
       <section className="rounded-xl border border-[color:var(--border)] bg-[color:var(--card)] p-6">
         <div className="flex items-center gap-2 mb-4">

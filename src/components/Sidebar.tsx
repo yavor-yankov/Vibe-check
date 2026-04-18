@@ -2,6 +2,8 @@
 
 import { Plus, Sparkles, Trash2 } from "lucide-react";
 import type { Session } from "@/lib/types";
+import UserBadge from "./UserBadge";
+import UsageBadge from "./UsageBadge";
 
 interface SidebarProps {
   sessions: Session[];
@@ -106,8 +108,11 @@ export default function Sidebar({
         )}
       </div>
 
-      <div className="p-4 border-t border-[color:var(--border)] text-xs text-[color:var(--muted)]">
-        Powered by Gemini &amp; Tavily. All data stays in your browser.
+      <UsageBadge className="p-3 border-t border-[color:var(--border)]" />
+      <UserBadge className="p-3 border-t border-[color:var(--border)]" />
+
+      <div className="px-4 py-3 border-t border-[color:var(--border)] text-[11px] text-[color:var(--muted)] leading-tight">
+        Powered by Gemini &amp; Tavily.
       </div>
     </aside>
   );
