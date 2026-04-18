@@ -40,6 +40,13 @@ export default function Home() {
   useEffect(() => {
     currentRef.current = current;
   }, [current]);
+  // Mirrors `sessions` so async callbacks (e.g. runRedTeam returning
+  // after a session switch) can find a target session by id without
+  // needing a re-fetch from the server.
+  const sessionsRef = useRef<Session[]>([]);
+  useEffect(() => {
+    sessionsRef.current = sessions;
+  }, [sessions]);
 
   // Hydrate from Postgres on mount. If it's empty and the browser has
   // legacy localStorage sessions, migrate them once.
@@ -78,28 +85,39 @@ export default function Home() {
     };
   }, []);
 
-  const persist = useCallback((s: Session) => {
-    const stamped: Session = { ...s, updatedAt: Date.now() };
-    setCurrent(stamped);
-    setSessions((prev) => {
-      const idx = prev.findIndex((x) => x.id === stamped.id);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = stamped;
-        return next.sort((a, b) => b.updatedAt - a.updatedAt);
-      }
-      return [stamped, ...prev];
-    });
-    // Fire server write in the background. We don't block the UI on it,
-    // but surface errors so the user knows persistence failed.
-    void persistSession(stamped).catch((err) => {
-      setError(
-        err instanceof Error
-          ? `Save failed: ${err.message}`
-          : "Save failed"
-      );
-    });
-  }, []);
+  /**
+   * Write a session to the sessions list + server. If it matches the
+   * currently-active session we also update `current` so the UI reflects
+   * the change immediately. For async callbacks that fire after the user
+   * has switched to another session (e.g. a slow red-team response), pass
+   * `{ updateCurrent: false }` so we don't yank them back.
+   */
+  const persist = useCallback(
+    (s: Session, opts: { updateCurrent?: boolean } = {}) => {
+      const { updateCurrent = true } = opts;
+      const stamped: Session = { ...s, updatedAt: Date.now() };
+      if (updateCurrent) setCurrent(stamped);
+      setSessions((prev) => {
+        const idx = prev.findIndex((x) => x.id === stamped.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = stamped;
+          return next.sort((a, b) => b.updatedAt - a.updatedAt);
+        }
+        return [stamped, ...prev];
+      });
+      // Fire server write in the background. We don't block the UI on it,
+      // but surface errors so the user knows persistence failed.
+      void persistSession(stamped).catch((err) => {
+        setError(
+          err instanceof Error
+            ? `Save failed: ${err.message}`
+            : "Save failed"
+        );
+      });
+    },
+    []
+  );
 
   const resetRedTeamState = () => {
     setIsRedTeamLoading(false);
@@ -331,14 +349,17 @@ export default function Home() {
       if (!res.ok || !data.redTeam) {
         throw new Error(data.error || "Red-team pass failed");
       }
-      // Use the latest in-memory session instead of re-fetching; the
-      // generation guard below still catches concurrent refines.
-      const live = currentRef.current;
-      const target = live?.id === sessionId ? live : null;
-      if (!target) return; // session was deleted or switched
+      // Look up the target by id in the in-memory sessions list so we
+      // can save the red-team result even if the user has switched away
+      // to another session while the request was in flight (it can take
+      // 10+ seconds). We only update `current` when the user is still
+      // on that session — otherwise we'd yank them back.
+      const target = sessionsRef.current.find((s) => s.id === sessionId);
+      if (!target) return; // session was deleted
       if ((target.reportGeneration ?? 0) !== generationAtStart) return;
       const updated: Session = { ...target, redTeamReport: data.redTeam };
-      persist(updated);
+      const stillActive = currentRef.current?.id === sessionId;
+      persist(updated, { updateCurrent: stillActive });
     } catch (err) {
       const live = currentRef.current;
       if (
