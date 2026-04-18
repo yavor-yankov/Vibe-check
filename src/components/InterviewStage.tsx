@@ -118,7 +118,8 @@ export default function InterviewStage({
             </div>
             <button
               onClick={() => onDone(readySummary)}
-              className="inline-flex items-center gap-2 rounded-lg bg-[color:var(--accent)] text-white px-5 py-2.5 font-medium hover:brightness-110 transition"
+              disabled={isStreaming}
+              className="inline-flex items-center gap-2 rounded-lg bg-[color:var(--accent)] text-white px-5 py-2.5 font-medium hover:brightness-110 transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Sparkles size={16} />
               Analyze idea
@@ -174,7 +175,7 @@ export default function InterviewStage({
 }
 
 function stripReady(content: string): string {
-  return content.replace(/^READY_FOR_ANALYSIS\s*:\s*/i, "").trim();
+  return content.replace(/READY_FOR_ANALYSIS\s*:\s*/i, "").trim();
 }
 
 function Message({ message }: { message: ChatMessage }) {
