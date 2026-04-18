@@ -20,6 +20,12 @@ export interface Database {
           email: string;
           subscription_tier: SubscriptionTier;
           stripe_customer_id: string | null;
+          stripe_subscription_id: string | null;
+          stripe_price_id: string | null;
+          subscription_status: string | null;
+          current_period_end: string | null;
+          usage_month: string | null;
+          usage_count: number;
           created_at: string;
           updated_at: string;
         };
@@ -28,11 +34,45 @@ export interface Database {
           email: string;
           subscription_tier?: SubscriptionTier;
           stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
+          stripe_price_id?: string | null;
+          subscription_status?: string | null;
+          current_period_end?: string | null;
+          usage_month?: string | null;
+          usage_count?: number;
         };
         Update: {
           email?: string;
           subscription_tier?: SubscriptionTier;
           stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
+          stripe_price_id?: string | null;
+          subscription_status?: string | null;
+          current_period_end?: string | null;
+          usage_month?: string | null;
+          usage_count?: number;
+        };
+        Relationships: EmptyRelationships;
+      };
+      tavily_cache: {
+        Row: {
+          query_key: string;
+          query: string;
+          response: unknown;
+          created_at: string;
+          expires_at: string;
+        };
+        Insert: {
+          query_key: string;
+          query: string;
+          response: unknown;
+          created_at?: string;
+          expires_at?: string;
+        };
+        Update: {
+          query?: string;
+          response?: unknown;
+          expires_at?: string;
         };
         Relationships: EmptyRelationships;
       };

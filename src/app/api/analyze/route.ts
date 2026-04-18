@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
-import { getGeminiClient, MODEL_NAME } from "@/lib/gemini";
+import { getGeminiClient, modelForTier } from "@/lib/gemini";
 import { ANALYSIS_SYSTEM_PROMPT } from "@/lib/prompts";
+import { consumeUsage } from "@/lib/billing/usage";
 import type {
   AnalysisReport,
   ChatMessage,
@@ -44,6 +45,21 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Quota + plan gate — a successful analyze counts as "one vibe check"
+  // against the monthly budget. Quota errors surface as 402 so the client
+  // can show the upgrade CTA without treating it like a server crash.
+  let plan;
+  try {
+    plan = await consumeUsage();
+  } catch (err) {
+    const e = err as Error & { code?: string };
+    if (e.code === "QUOTA_EXCEEDED") {
+      return Response.json({ error: e.message }, { status: 402 });
+    }
+    const msg = e instanceof Error ? e.message : "Not authenticated";
+    return Response.json({ error: msg }, { status: 401 });
+  }
+
   let client;
   try {
     client = getGeminiClient();
@@ -69,7 +85,7 @@ export async function POST(request: NextRequest) {
   const userPrompt = `# Idea summary\n${ideaSummary}\n\n# Interview transcript\n${transcript}\n\n# Competitors found on the web\n${competitorBlock}\n\nReturn ONLY the JSON described in your instructions.`;
 
   const model = client.getGenerativeModel({
-    model: MODEL_NAME,
+    model: modelForTier(plan.tier),
     systemInstruction: ANALYSIS_SYSTEM_PROMPT,
     generationConfig: {
       responseMimeType: "application/json",

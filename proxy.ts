@@ -1,8 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseProxyClient } from "@/lib/supabase/proxy";
 
-// Routes that stay accessible without a session.
-const PUBLIC_PATHS = ["/signin", "/auth/callback", "/api/auth"];
+// Routes that stay accessible without a session. /api/billing/webhook is
+// here because Stripe calls it externally with no cookies — it
+// authenticates via the Stripe-Signature header instead.
+const PUBLIC_PATHS = [
+  "/signin",
+  "/auth/callback",
+  "/api/auth",
+  "/api/billing/webhook",
+  "/pricing",
+];
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some(
