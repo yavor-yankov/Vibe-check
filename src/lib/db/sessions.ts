@@ -209,6 +209,88 @@ export async function clearRedTeamReport(
   if (error) throw error;
 }
 
+/**
+ * Full-replace upsert that mirrors localStorage semantics: given a `Session`
+ * object, make the database rows match it exactly.
+ *
+ * Used by `POST /api/sessions` so the client can keep its existing
+ * "persist the whole session object on every change" flow.
+ *
+ * Preserves the caller-supplied `id`, `createdAt`. RLS ensures the caller can
+ * only touch rows that belong to `userId`.
+ */
+export async function upsertSessionFull(
+  supabase: DB,
+  userId: string,
+  session: Session
+): Promise<Session> {
+  // 1. Upsert the session row.
+  const { error: upsertErr } = await supabase.from("sessions").upsert(
+    {
+      id: session.id,
+      user_id: userId,
+      title: session.title,
+      stage: session.stage,
+      idea_summary: session.ideaSummary ?? null,
+      report_generation: session.reportGeneration ?? 0,
+    },
+    { onConflict: "id" }
+  );
+  if (upsertErr) throw upsertErr;
+
+  // 2. Replace messages. Delete first so we don't accumulate rows across
+  //    refine passes / edits.
+  const delMsg = await supabase
+    .from("messages")
+    .delete()
+    .eq("session_id", session.id);
+  if (delMsg.error) throw delMsg.error;
+  if (session.messages.length > 0) {
+    const { error } = await supabase.from("messages").insert(
+      session.messages.map((m) => ({
+        id: m.id,
+        session_id: session.id,
+        role: m.role,
+        content: m.content,
+        created_at: new Date(m.createdAt).toISOString(),
+      }))
+    );
+    if (error) throw error;
+  }
+
+  // 3. Replace competitors.
+  await replaceCompetitors(supabase, session.id, session.competitors);
+
+  // 4. Report — upsert if present, delete if cleared.
+  if (session.report) {
+    await saveReport(supabase, session.id, session.report);
+  } else {
+    const { error } = await supabase
+      .from("reports")
+      .delete()
+      .eq("session_id", session.id);
+    if (error) throw error;
+  }
+
+  // 5. Red-team report — upsert if present, delete if cleared.
+  if (session.redTeamReport) {
+    await saveRedTeamReport(
+      supabase,
+      session.id,
+      session.redTeamReport,
+      session.reportGeneration ?? 0
+    );
+  } else {
+    await clearRedTeamReport(supabase, session.id);
+  }
+
+  const reloaded = await getSession(supabase, session.id);
+  if (!reloaded) {
+    throw new Error("Session disappeared after upsert — RLS mismatch?");
+  }
+  return reloaded;
+}
+
 // ---------------------------------------------------------------------------
 // Row → domain mapping. Keep in lockstep with src/lib/types.ts.
 // ---------------------------------------------------------------------------
