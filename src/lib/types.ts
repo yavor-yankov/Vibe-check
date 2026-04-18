@@ -49,6 +49,12 @@ export interface AnalysisReport {
   mvpScope: string[];
 }
 
+export interface RedTeamReport {
+  verdict: string;
+  reasons: string[];
+  silentKillers: string[];
+}
+
 export type WizardStage = "intro" | "interview" | "scanning" | "report";
 
 export interface Session {
@@ -61,4 +67,9 @@ export interface Session {
   competitors: Competitor[];
   report: AnalysisReport | null;
   ideaSummary?: string;
+  redTeamReport?: RedTeamReport | null;
+  // Monotonic counter bumped on every successful analyze/refine. Used by
+  // runRedTeam to detect a concurrent refine and avoid merging a stale
+  // red-team response onto a freshly re-scored report.
+  reportGeneration?: number;
 }

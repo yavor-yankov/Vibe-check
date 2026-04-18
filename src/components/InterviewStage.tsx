@@ -1,6 +1,6 @@
 "use client";
 
-import { Send, Sparkles, User } from "lucide-react";
+import { Send, Sparkles, User, Wand2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "@/lib/types";
 
@@ -9,6 +9,19 @@ interface InterviewStageProps {
   onSend: (text: string) => void;
   onDone: (ideaSummary: string) => void;
   isStreaming: boolean;
+}
+
+// Minimum user turns before the "analyze now" escape hatch is offered.
+const ESCAPE_HATCH_MIN_TURNS = 2;
+
+function syntheticSummaryFromMessages(messages: ChatMessage[]): string {
+  const userTurns = messages
+    .filter((m) => m.role === "user")
+    .map((m) => m.content.trim())
+    .filter(Boolean);
+  if (userTurns.length === 0) return "";
+  // Keep first turn (usually the seed idea) + later turns concatenated, capped.
+  return userTurns.join(" · ").slice(0, 800);
 }
 
 function makeId() {
@@ -59,6 +72,9 @@ export default function InterviewStage({
   const last = messages[messages.length - 1];
   const readySummary =
     last && last.role === "assistant" ? extractReady(last.content) : null;
+  const userTurnCount = messages.filter((m) => m.role === "user").length;
+  const canEscape =
+    !readySummary && !isStreaming && userTurnCount >= ESCAPE_HATCH_MIN_TURNS;
 
   function submit() {
     const t = draft.trim();
@@ -135,6 +151,22 @@ export default function InterviewStage({
               <Send size={16} />
             </button>
           </div>
+          {canEscape && (
+            <div className="max-w-3xl mx-auto mt-2 flex justify-end">
+              <button
+                onClick={() => {
+                  const summary = syntheticSummaryFromMessages(messages);
+                  if (summary) onDone(summary);
+                }}
+                disabled={isStreaming}
+                className="inline-flex items-center gap-1.5 text-xs text-[color:var(--muted)] hover:text-[color:var(--accent)] transition disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Skip remaining questions and analyze now"
+              >
+                <Wand2 size={12} />
+                I&apos;m done — analyze now
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import IntroStage from "@/components/IntroStage";
 import InterviewStage, {
   buildAssistantMessage,
@@ -9,7 +9,12 @@ import InterviewStage, {
 import ScanningStage from "@/components/ScanningStage";
 import ReportStage from "@/components/ReportStage";
 import Sidebar from "@/components/Sidebar";
-import type { AnalysisReport, ChatMessage, Session } from "@/lib/types";
+import type {
+  AnalysisReport,
+  ChatMessage,
+  RedTeamReport,
+  Session,
+} from "@/lib/types";
 import {
   deleteSession,
   loadSessions,
@@ -22,6 +27,16 @@ export default function Home() {
   const [current, setCurrent] = useState<Session | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isRedTeamLoading, setIsRedTeamLoading] = useState(false);
+  const [redTeamError, setRedTeamError] = useState<string | null>(null);
+
+  // Keep a ref to the latest active session so async callbacks don't
+  // act on stale closures (e.g. runRedTeam finishing after the user
+  // switched sessions or hit "New check").
+  const currentRef = useRef<Session | null>(null);
+  useEffect(() => {
+    currentRef.current = current;
+  }, [current]);
 
   // hydrate from localStorage on mount (client-only)
   /* eslint-disable react-hooks/set-state-in-effect */
@@ -38,10 +53,16 @@ export default function Home() {
     setCurrent(s);
   }, []);
 
+  const resetRedTeamState = () => {
+    setIsRedTeamLoading(false);
+    setRedTeamError(null);
+  };
+
   const handleNew = () => {
     const s = newSession();
     setCurrent(s);
     setError(null);
+    resetRedTeamState();
   };
 
   const handleSelect = (id: string) => {
@@ -49,6 +70,7 @@ export default function Home() {
     if (s) {
       setCurrent(s);
       setError(null);
+      resetRedTeamState();
     }
   };
 
@@ -57,6 +79,7 @@ export default function Home() {
     setSessions(all);
     if (current?.id === id) {
       setCurrent(all[0] ?? newSession());
+      resetRedTeamState();
     }
   };
 
@@ -131,17 +154,12 @@ export default function Home() {
     }
   };
 
-  const runAnalysis = async (ideaSummary: string) => {
-    if (!current) return;
-    setError(null);
-
-    const scanning: Session = {
-      ...current,
-      stage: "scanning",
-      ideaSummary,
-    };
-    persist(scanning);
-
+  const analyze = async (
+    scanning: Session,
+    revertStage: Session["stage"],
+    revertIdeaSummary?: string
+  ) => {
+    const ideaSummary = scanning.ideaSummary ?? "";
     try {
       // 1. search competitors
       const searchRes = await fetch("/api/search", {
@@ -163,7 +181,7 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: current.messages,
+          messages: scanning.messages,
           ideaSummary,
           competitors,
         }),
@@ -181,13 +199,111 @@ export default function Home() {
         stage: "report",
         competitors,
         report: analyzeData.report,
+        // Refining invalidates the prior red-team pass — force re-run.
+        redTeamReport: null,
+        reportGeneration: (scanning.reportGeneration ?? 0) + 1,
       };
       persist(done);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       setError(msg);
-      // revert to interview so user can try again
-      persist({ ...current, stage: "interview" });
+      // revert so the user can retry from a sensible stage. If caller
+      // supplied an original ideaSummary (refine path), restore it so the
+      // report/competitors on screen stay in sync with the seed text the
+      // Re-score textarea is pre-filled with.
+      persist({
+        ...scanning,
+        stage: revertStage,
+        ideaSummary: revertIdeaSummary ?? scanning.ideaSummary,
+      });
+    }
+  };
+
+  const runAnalysis = async (ideaSummary: string) => {
+    if (!current) return;
+    setError(null);
+    const scanning: Session = {
+      ...current,
+      stage: "scanning",
+      ideaSummary,
+    };
+    persist(scanning);
+    await analyze(scanning, "interview");
+  };
+
+  const refineAnalysis = async (newSummary: string) => {
+    if (!current) return;
+    setError(null);
+    resetRedTeamState();
+    // Keep the prior report and competitors around so a failed re-run
+    // reverts cleanly to what the user had before.
+    const originalSummary = current.ideaSummary;
+    const scanning: Session = {
+      ...current,
+      stage: "scanning",
+      ideaSummary: newSummary,
+    };
+    persist(scanning);
+    await analyze(scanning, "report", originalSummary);
+  };
+
+  const runRedTeam = async () => {
+    const snapshot = currentRef.current;
+    if (!snapshot || !snapshot.report) return;
+    const sessionId = snapshot.id;
+    const generationAtStart = snapshot.reportGeneration ?? 0;
+    setRedTeamError(null);
+    setIsRedTeamLoading(true);
+    try {
+      const res = await fetch("/api/redteam", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ideaSummary: snapshot.ideaSummary ?? "",
+          messages: snapshot.messages,
+          competitors: snapshot.competitors,
+          report: snapshot.report,
+        }),
+      });
+      const data = (await res.json()) as {
+        redTeam?: RedTeamReport;
+        error?: string;
+      };
+      if (!res.ok || !data.redTeam) {
+        throw new Error(data.error || "Red-team pass failed");
+      }
+      // Merge onto whatever's in storage for this id — don't clobber
+      // fields that may have changed (e.g. a concurrent refine).
+      const target = loadSessions().find((s) => s.id === sessionId);
+      if (!target) return; // session was deleted
+      // Refine ran while we were in flight — the red-team is for a
+      // superseded report. Drop it; the user can re-open to re-run.
+      if ((target.reportGeneration ?? 0) !== generationAtStart) return;
+      const updated: Session = { ...target, redTeamReport: data.redTeam };
+      const all = upsertSession(updated);
+      setSessions(all);
+      if (currentRef.current?.id === sessionId) {
+        setCurrent(updated);
+      }
+    } catch (err) {
+      // Only surface the error if the session + generation still match —
+      // otherwise the user has already moved on.
+      const live = currentRef.current;
+      if (
+        live?.id === sessionId &&
+        (live.reportGeneration ?? 0) === generationAtStart
+      ) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        setRedTeamError(msg);
+      }
+    } finally {
+      const live = currentRef.current;
+      if (
+        live?.id === sessionId &&
+        (live.reportGeneration ?? 0) === generationAtStart
+      ) {
+        setIsRedTeamLoading(false);
+      }
     }
   };
 
@@ -234,10 +350,16 @@ export default function Home() {
 
         {current.stage === "report" && current.report && (
           <ReportStage
+            key={current.id}
             report={current.report}
             competitors={current.competitors}
             ideaSummary={current.ideaSummary ?? ""}
+            redTeamReport={current.redTeamReport ?? null}
+            isRedTeamLoading={isRedTeamLoading}
+            redTeamError={redTeamError}
             onRestart={handleNew}
+            onRefine={refineAnalysis}
+            onRedTeam={runRedTeam}
           />
         )}
       </main>
