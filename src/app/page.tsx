@@ -172,13 +172,26 @@ export default function Home() {
       }
       return next;
     });
-    void deleteSessionRemote(id).catch((err) => {
-      setError(
-        err instanceof Error
-          ? `Delete failed: ${err.message}`
-          : "Delete failed"
-      );
-    });
+    // Chain the server DELETE onto any in-flight persist for this id so
+    // a queued upsert can't resurrect the session after the DELETE lands.
+    const queue = persistQueueRef.current;
+    const prev = queue.get(id) ?? Promise.resolve();
+    const next = prev
+      .catch(() => {
+        /* previous write's error was already surfaced */
+      })
+      .then(() => deleteSessionRemote(id))
+      .catch((err) => {
+        setError(
+          err instanceof Error
+            ? `Delete failed: ${err.message}`
+            : "Delete failed"
+        );
+      })
+      .finally(() => {
+        if (queue.get(id) === next) queue.delete(id);
+      });
+    queue.set(id, next);
   };
 
   const startInterview = async (seed: string) => {
