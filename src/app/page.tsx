@@ -341,6 +341,7 @@ export default function Home() {
 
         {current.stage === "report" && current.report && (
           <ReportStage
+            key={current.id}
             report={current.report}
             competitors={current.competitors}
             ideaSummary={current.ideaSummary ?? ""}

@@ -103,7 +103,7 @@ export default function ReportStage({
   }
 
   function handleRedTeamClick() {
-    if (!redTeamReport && !isRedTeamLoading) {
+    if (!redTeamReport && !isRedTeamLoading && !redTeamError && !redTeamOpen) {
       onRedTeam();
     }
     setRedTeamOpen((v) => !v);
