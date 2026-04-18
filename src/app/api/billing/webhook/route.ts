@@ -98,10 +98,13 @@ export async function POST(request: Request) {
         const periodEnd = (sub as Stripe.Subscription & {
           current_period_end?: number;
         }).current_period_end;
+        // Lifetime is a paid permanent entitlement; a stale Pro
+        // subscription emitting lifecycle events must never demote it.
+        // Update subscription metadata, but only touch the tier when the
+        // user isn't on lifetime.
         await admin
           .from("users")
           .update({
-            subscription_tier: sub.status === "active" ? "pro" : "free",
             subscription_status: sub.status,
             stripe_subscription_id: sub.id,
             stripe_price_id: priceId,
@@ -111,22 +114,35 @@ export async function POST(request: Request) {
                 : null,
           })
           .eq("stripe_customer_id", customerId);
+        await admin
+          .from("users")
+          .update({
+            subscription_tier: sub.status === "active" ? "pro" : "free",
+          })
+          .eq("stripe_customer_id", customerId)
+          .neq("subscription_tier", "lifetime");
         break;
       }
       case "customer.subscription.deleted": {
         const sub = event.data.object;
         const customerId =
           typeof sub.customer === "string" ? sub.customer : sub.customer.id;
+        // Always clear the subscription pointers; only demote the tier if
+        // the user isn't on a lifetime entitlement.
         await admin
           .from("users")
           .update({
-            subscription_tier: "free",
             subscription_status: sub.status,
             stripe_subscription_id: null,
             stripe_price_id: null,
             current_period_end: null,
           })
           .eq("stripe_customer_id", customerId);
+        await admin
+          .from("users")
+          .update({ subscription_tier: "free" })
+          .eq("stripe_customer_id", customerId)
+          .neq("subscription_tier", "lifetime");
         break;
       }
       default:

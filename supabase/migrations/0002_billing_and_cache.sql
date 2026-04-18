@@ -63,6 +63,14 @@ as $$
 declare
   v_new_count integer;
 begin
+  -- Only allow the signed-in user (or service_role, which has auth.uid()
+  -- == null) to modify their own counter — otherwise any authenticated
+  -- browser client could silently mint unlimited quota or attack another
+  -- user's quota via the RPC.
+  if auth.uid() is not null and auth.uid() <> p_user_id then
+    raise exception 'forbidden' using errcode = 'P0001';
+  end if;
+
   update public.users
      set usage_month = p_month,
          usage_count = case
@@ -101,6 +109,12 @@ as $$
 declare
   v_new_count integer;
 begin
+  -- Same guard as increment_usage: service_role bypasses (auth.uid() is null),
+  -- authenticated callers may only refund their own slot.
+  if auth.uid() is not null and auth.uid() <> p_user_id then
+    raise exception 'forbidden' using errcode = 'P0001';
+  end if;
+
   update public.users
      set usage_count = greatest(0, usage_count - 1)
    where id = p_user_id

@@ -45,6 +45,17 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Resolve the Gemini client FIRST so a missing API key never burns a
+  // quota slot. Only once we know the downstream call is reachable do we
+  // consume a check.
+  let client;
+  try {
+    client = getGeminiClient();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Gemini not configured";
+    return Response.json({ error: msg }, { status: 500 });
+  }
+
   // Quota + plan gate — a successful analyze counts as "one vibe check"
   // against the monthly budget. Quota errors surface as 402 so the client
   // can show the upgrade CTA without treating it like a server crash.
@@ -58,14 +69,6 @@ export async function POST(request: NextRequest) {
     }
     const msg = e instanceof Error ? e.message : "Not authenticated";
     return Response.json({ error: msg }, { status: 401 });
-  }
-
-  let client;
-  try {
-    client = getGeminiClient();
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Gemini not configured";
-    return Response.json({ error: msg }, { status: 500 });
   }
 
   const transcript = (messages ?? [])
