@@ -156,7 +156,8 @@ export default function Home() {
 
   const analyze = async (
     scanning: Session,
-    revertStage: Session["stage"]
+    revertStage: Session["stage"],
+    revertIdeaSummary?: string
   ) => {
     const ideaSummary = scanning.ideaSummary ?? "";
     try {
@@ -206,8 +207,15 @@ export default function Home() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       setError(msg);
-      // revert so the user can retry from a sensible stage
-      persist({ ...scanning, stage: revertStage });
+      // revert so the user can retry from a sensible stage. If caller
+      // supplied an original ideaSummary (refine path), restore it so the
+      // report/competitors on screen stay in sync with the seed text the
+      // Re-score textarea is pre-filled with.
+      persist({
+        ...scanning,
+        stage: revertStage,
+        ideaSummary: revertIdeaSummary ?? scanning.ideaSummary,
+      });
     }
   };
 
@@ -229,13 +237,14 @@ export default function Home() {
     resetRedTeamState();
     // Keep the prior report and competitors around so a failed re-run
     // reverts cleanly to what the user had before.
+    const originalSummary = current.ideaSummary;
     const scanning: Session = {
       ...current,
       stage: "scanning",
       ideaSummary: newSummary,
     };
     persist(scanning);
-    await analyze(scanning, "report");
+    await analyze(scanning, "report", originalSummary);
   };
 
   const runRedTeam = async () => {
