@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import IntroStage from "@/components/IntroStage";
 import InterviewStage, {
   buildAssistantMessage,
@@ -30,6 +30,14 @@ export default function Home() {
   const [isRedTeamLoading, setIsRedTeamLoading] = useState(false);
   const [redTeamError, setRedTeamError] = useState<string | null>(null);
 
+  // Keep a ref to the latest active session so async callbacks don't
+  // act on stale closures (e.g. runRedTeam finishing after the user
+  // switched sessions or hit "New check").
+  const currentRef = useRef<Session | null>(null);
+  useEffect(() => {
+    currentRef.current = current;
+  }, [current]);
+
   // hydrate from localStorage on mount (client-only)
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -45,10 +53,16 @@ export default function Home() {
     setCurrent(s);
   }, []);
 
+  const resetRedTeamState = () => {
+    setIsRedTeamLoading(false);
+    setRedTeamError(null);
+  };
+
   const handleNew = () => {
     const s = newSession();
     setCurrent(s);
     setError(null);
+    resetRedTeamState();
   };
 
   const handleSelect = (id: string) => {
@@ -56,6 +70,7 @@ export default function Home() {
     if (s) {
       setCurrent(s);
       setError(null);
+      resetRedTeamState();
     }
   };
 
@@ -64,6 +79,7 @@ export default function Home() {
     setSessions(all);
     if (current?.id === id) {
       setCurrent(all[0] ?? newSession());
+      resetRedTeamState();
     }
   };
 
@@ -210,21 +226,21 @@ export default function Home() {
     if (!current) return;
     setError(null);
     setRedTeamError(null);
-    const prevReport = current.report;
+    // Keep the prior report and competitors around so a failed re-run
+    // reverts cleanly to what the user had before.
     const scanning: Session = {
       ...current,
       stage: "scanning",
       ideaSummary: newSummary,
-      competitors: [],
-      // keep the prior report around so we can revert on failure
-      report: prevReport,
     };
     persist(scanning);
     await analyze(scanning, "report");
   };
 
   const runRedTeam = async () => {
-    if (!current || !current.report) return;
+    const snapshot = currentRef.current;
+    if (!snapshot || !snapshot.report) return;
+    const sessionId = snapshot.id;
     setRedTeamError(null);
     setIsRedTeamLoading(true);
     try {
@@ -232,10 +248,10 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ideaSummary: current.ideaSummary ?? "",
-          messages: current.messages,
-          competitors: current.competitors,
-          report: current.report,
+          ideaSummary: snapshot.ideaSummary ?? "",
+          messages: snapshot.messages,
+          competitors: snapshot.competitors,
+          report: snapshot.report,
         }),
       });
       const data = (await res.json()) as {
@@ -245,12 +261,25 @@ export default function Home() {
       if (!res.ok || !data.redTeam) {
         throw new Error(data.error || "Red-team pass failed");
       }
-      persist({ ...current, redTeamReport: data.redTeam });
+      // Merge onto whatever's in storage for this id — don't clobber
+      // fields that may have changed (e.g. a concurrent refine).
+      const target = loadSessions().find((s) => s.id === sessionId);
+      if (!target) return; // session was deleted
+      const updated: Session = { ...target, redTeamReport: data.redTeam };
+      const all = upsertSession(updated);
+      setSessions(all);
+      if (currentRef.current?.id === sessionId) {
+        setCurrent(updated);
+      }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Unknown error";
-      setRedTeamError(msg);
+      if (currentRef.current?.id === sessionId) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        setRedTeamError(msg);
+      }
     } finally {
-      setIsRedTeamLoading(false);
+      if (currentRef.current?.id === sessionId) {
+        setIsRedTeamLoading(false);
+      }
     }
   };
 
