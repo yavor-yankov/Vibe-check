@@ -20,6 +20,17 @@ interface AnalyzeRequestBody {
 // Strip `insights` entirely if the model returned a malformed payload.
 // We'd rather render the original report cleanly than explode the UI on
 // half-formed expanded insights.
+const BUILD_EFFORT_BUCKETS: ReadonlyArray<ExpandedInsights["buildEffort"]["bucket"]> = [
+  "weekend",
+  "1-2 weeks",
+  "1-3 months",
+  "3-6 months",
+  "6+ months",
+];
+const PRICING_MODELS: ReadonlyArray<
+  ExpandedInsights["pricingBenchmarks"][number]["model"]
+> = ["freemium", "subscription", "one-time", "usage-based", "free"];
+
 function sanitizeInsights(
   raw: unknown
 ): ExpandedInsights | undefined {
@@ -43,6 +54,9 @@ function sanitizeInsights(
   if (
     !be ||
     typeof be.bucket !== "string" ||
+    !BUILD_EFFORT_BUCKETS.includes(
+      be.bucket as ExpandedInsights["buildEffort"]["bucket"]
+    ) ||
     typeof be.teamSize !== "string" ||
     typeof be.headlineRisk !== "string"
   ) {
@@ -97,7 +111,11 @@ function sanitizeInsights(
           typeof (x as Record<string, unknown>).competitor === "string" &&
           typeof (x as Record<string, unknown>).freeTier === "string" &&
           typeof (x as Record<string, unknown>).paidTier === "string" &&
-          typeof (x as Record<string, unknown>).model === "string"
+          typeof (x as Record<string, unknown>).model === "string" &&
+          PRICING_MODELS.includes(
+            (x as Record<string, unknown>)
+              .model as ExpandedInsights["pricingBenchmarks"][number]["model"]
+          )
       )
     : [];
 
