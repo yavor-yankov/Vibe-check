@@ -1,0 +1,186 @@
+// Hand-maintained Supabase schema type matching supabase/migrations/0001_initial_schema.sql.
+//
+// Once the project is linked to the Supabase CLI we can regenerate this file via:
+//   pnpm dlx supabase gen types typescript --linked > src/lib/supabase/database.types.ts
+// Until then, keep this file in sync with the migration by hand.
+
+export type SubscriptionTier = "free" | "pro" | "lifetime";
+export type SessionStage = "intro" | "interview" | "scanning" | "report";
+export type MessageRole = "user" | "assistant" | "system";
+export type Verdict = "build_it" | "iterate" | "rethink" | "skip";
+
+type EmptyRelationships = [];
+
+export interface Database {
+  public: {
+    Tables: {
+      users: {
+        Row: {
+          id: string;
+          email: string;
+          subscription_tier: SubscriptionTier;
+          stripe_customer_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          email: string;
+          subscription_tier?: SubscriptionTier;
+          stripe_customer_id?: string | null;
+        };
+        Update: {
+          email?: string;
+          subscription_tier?: SubscriptionTier;
+          stripe_customer_id?: string | null;
+        };
+        Relationships: EmptyRelationships;
+      };
+      sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          stage: SessionStage;
+          idea_summary: string | null;
+          report_generation: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          title?: string;
+          stage?: SessionStage;
+          idea_summary?: string | null;
+          report_generation?: number;
+        };
+        Update: {
+          title?: string;
+          stage?: SessionStage;
+          idea_summary?: string | null;
+          report_generation?: number;
+        };
+        Relationships: EmptyRelationships;
+      };
+      messages: {
+        Row: {
+          id: string;
+          session_id: string;
+          role: MessageRole;
+          content: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          session_id: string;
+          role: MessageRole;
+          content: string;
+          created_at?: string;
+        };
+        Update: {
+          content?: string;
+        };
+        Relationships: EmptyRelationships;
+      };
+      competitors: {
+        Row: {
+          id: string;
+          session_id: string;
+          title: string;
+          url: string;
+          snippet: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          session_id: string;
+          title: string;
+          url: string;
+          snippet?: string | null;
+        };
+        Update: {
+          title?: string;
+          url?: string;
+          snippet?: string | null;
+        };
+        Relationships: EmptyRelationships;
+      };
+      reports: {
+        Row: {
+          id: string;
+          session_id: string;
+          verdict: Verdict;
+          verdict_label: string;
+          summary: string;
+          scores: Record<string, number>;
+          strengths: string[];
+          risks: string[];
+          unique_angles: string[];
+          tech_stack: Record<string, string[]>;
+          roadmap: Array<{ title: string; detail: string; estimate: string }>;
+          mvp_scope: string[];
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          session_id: string;
+          verdict: Verdict;
+          verdict_label: string;
+          summary: string;
+          scores: Record<string, number>;
+          strengths?: string[];
+          risks?: string[];
+          unique_angles?: string[];
+          tech_stack: Record<string, string[]>;
+          roadmap?: Array<{ title: string; detail: string; estimate: string }>;
+          mvp_scope?: string[];
+        };
+        Update: {
+          verdict?: Verdict;
+          verdict_label?: string;
+          summary?: string;
+          scores?: Record<string, number>;
+          strengths?: string[];
+          risks?: string[];
+          unique_angles?: string[];
+          tech_stack?: Record<string, string[]>;
+          roadmap?: Array<{ title: string; detail: string; estimate: string }>;
+          mvp_scope?: string[];
+        };
+        Relationships: EmptyRelationships;
+      };
+      red_team_reports: {
+        Row: {
+          id: string;
+          session_id: string;
+          verdict: string;
+          reasons: string[];
+          silent_killers: string[];
+          report_generation: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          session_id: string;
+          verdict: string;
+          reasons?: string[];
+          silent_killers?: string[];
+          report_generation: number;
+        };
+        Update: {
+          verdict?: string;
+          reasons?: string[];
+          silent_killers?: string[];
+          report_generation?: number;
+        };
+        Relationships: EmptyRelationships;
+      };
+    };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
+  };
+}
