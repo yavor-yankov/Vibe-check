@@ -125,7 +125,15 @@ begin
 end;
 $$;
 
+-- RPC access is locked to service_role only. The server-side
+-- `consumeUsage` / `refundUsage` helpers (see src/lib/billing/usage.ts)
+-- use the admin client, so regular signed-in users can't call these
+-- from the browser and reset their own quota counter.
+revoke execute on function public.increment_usage(uuid, text, boolean, integer)
+  from public, authenticated;
+revoke execute on function public.decrement_usage(uuid, text)
+  from public, authenticated;
 grant execute on function public.increment_usage(uuid, text, boolean, integer)
-  to authenticated, service_role;
+  to service_role;
 grant execute on function public.decrement_usage(uuid, text)
-  to authenticated, service_role;
+  to service_role;

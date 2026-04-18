@@ -6,6 +6,7 @@
  * usage indicators in the UI.
  */
 
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { currentUsageMonth, getTier, PRICING_TIERS } from "./plan";
 import type { SubscriptionTier } from "@/lib/supabase/database.types";
@@ -105,8 +106,12 @@ export async function consumeUsage(): Promise<PlanSnapshot> {
   // need to pass a concrete integer through the JSON-RPC boundary.
   const quotaParam = unlimited ? 0 : snapshot.quota;
 
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc("increment_usage", {
+  // Use the service-role client so the RPC grants are locked down to
+  // service_role only — otherwise a signed-in user could call
+  // decrement_usage from the browser and reset their own counter
+  // (self-attack bypass of the monthly quota).
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.rpc("increment_usage", {
     p_user_id: snapshot.userId,
     p_month: month,
     p_unlimited: unlimited,
@@ -144,8 +149,9 @@ export async function refundUsage(
   month: string
 ): Promise<void> {
   try {
-    const supabase = await createSupabaseServerClient();
-    await supabase.rpc("decrement_usage", {
+    // Service-role only — see note in consumeUsage above.
+    const admin = createSupabaseAdminClient();
+    await admin.rpc("decrement_usage", {
       p_user_id: userId,
       p_month: month,
     });
