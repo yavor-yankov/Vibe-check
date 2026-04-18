@@ -78,14 +78,17 @@ export async function POST(request: Request) {
           // For subscriptions Stripe will send a follow-up
           // customer.subscription.updated event with the full object —
           // we'll fill in stripe_subscription_id + period there. Flip
-          // the tier here for an immediate unlock.
+          // the tier here for an immediate unlock, but never demote a
+          // lifetime entitlement if the same user happens to run a Pro
+          // checkout afterwards.
           await admin
             .from("users")
             .update({
               subscription_tier: "pro",
               subscription_status: "active",
             })
-            .eq("stripe_customer_id", customerId);
+            .eq("stripe_customer_id", customerId)
+            .neq("subscription_tier", "lifetime");
         }
         break;
       }
