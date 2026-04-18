@@ -34,5 +34,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  return NextResponse.redirect(new URL(next, origin));
+  // Only accept same-origin relative paths for `next` — otherwise
+  // `new URL("https://evil.com", origin)` resolves to the attacker URL,
+  // giving us an open redirect / phishing vector.
+  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/";
+  return NextResponse.redirect(new URL(safeNext, origin));
 }
