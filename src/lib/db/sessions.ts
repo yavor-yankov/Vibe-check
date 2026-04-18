@@ -173,6 +173,9 @@ export async function saveReport(
       tech_stack: report.techStack as unknown as Record<string, string[]>,
       roadmap: report.roadmap,
       mvp_scope: report.mvpScope,
+      insights: (report.insights ?? null) as unknown as
+        | Record<string, unknown>
+        | null,
     },
     { onConflict: "session_id" }
   );
@@ -360,6 +363,7 @@ function rowToReport(row: ReportRow): AnalysisReport {
     },
     roadmap: row.roadmap ?? [],
     mvpScope: row.mvp_scope ?? [],
+    insights: (row.insights ?? undefined) as AnalysisReport["insights"],
   };
 }
 

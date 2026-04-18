@@ -170,6 +170,7 @@ export interface Database {
           tech_stack: Record<string, string[]>;
           roadmap: Array<{ title: string; detail: string; estimate: string }>;
           mvp_scope: string[];
+          insights: Record<string, unknown> | null;
           created_at: string;
           updated_at: string;
         };
@@ -186,6 +187,7 @@ export interface Database {
           tech_stack: Record<string, string[]>;
           roadmap?: Array<{ title: string; detail: string; estimate: string }>;
           mvp_scope?: string[];
+          insights?: Record<string, unknown> | null;
         };
         Update: {
           verdict?: Verdict;
@@ -198,6 +200,7 @@ export interface Database {
           tech_stack?: Record<string, string[]>;
           roadmap?: Array<{ title: string; detail: string; estimate: string }>;
           mvp_scope?: string[];
+          insights?: Record<string, unknown> | null;
         };
         Relationships: SessionFkRelationship<"reports_session_id_fkey">;
       };
