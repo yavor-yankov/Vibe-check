@@ -2,18 +2,14 @@ import { NextRequest } from "next/server";
 import { getGeminiClient, modelForTier } from "@/lib/gemini";
 import { INTERVIEW_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
-import type { ChatMessage } from "@/lib/types";
+import { ChatBodySchema, parseBody } from "@/lib/validation";
 
 export const runtime = "nodejs";
 
-interface ChatRequestBody {
-  messages: ChatMessage[];
-}
-
 export async function POST(request: NextRequest) {
-  let body: ChatRequestBody;
+  let raw: unknown;
   try {
-    body = (await request.json()) as ChatRequestBody;
+    raw = await request.json();
   } catch {
     return new Response(
       JSON.stringify({ error: "Invalid JSON body" }),
@@ -21,8 +17,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const messages = body.messages ?? [];
-  if (!Array.isArray(messages) || messages.length === 0) {
+  const parsed = parseBody(ChatBodySchema, raw);
+  if (!parsed.ok) return parsed.response;
+
+  const { messages } = parsed.data;
+  if (messages.length === 0) {
     return new Response(
       JSON.stringify({ error: "messages array is required" }),
       { status: 400, headers: { "Content-Type": "application/json" } }
