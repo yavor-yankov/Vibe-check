@@ -474,7 +474,7 @@ export default function Home() {
   }
 
   return (
-    <div className="flex flex-1 min-h-screen">
+    <div className="flex h-screen overflow-hidden">
       <Sidebar
         sessions={sessions}
         activeId={current.id}
@@ -487,7 +487,7 @@ export default function Home() {
         usageRefreshSignal={usageRefreshSignal}
       />
       {/* On mobile, add top padding to clear the fixed hamburger button */}
-      <main className="flex-1 min-w-0 md:pt-0 pt-14">
+      <main className="flex-1 min-w-0 md:pt-0 pt-14 flex flex-col overflow-hidden">
         {error && (
           <div className="px-6 pt-4">
             <div className="max-w-3xl mx-auto rounded-lg border border-[color:var(--bad)]/30 bg-[color:var(--bad)]/5 px-4 py-3 text-sm text-[color:var(--bad)]">
@@ -496,45 +496,57 @@ export default function Home() {
           </div>
         )}
 
-        {current.stage === "intro" && <IntroStage onStart={startInterview} />}
+        {current.stage === "intro" && (
+          <div className="flex-1 overflow-y-auto">
+            <IntroStage onStart={startInterview} />
+          </div>
+        )}
 
+        {/* InterviewStage manages its own internal scroll — give it all remaining height.
+            The wrapping div passes height down; InterviewStage uses h-full internally. */}
         {current.stage === "interview" && (
+          <div className="flex-1 min-h-0 flex flex-col">
           <InterviewStage
             messages={current.messages}
             onSend={sendInterviewAnswer}
             onDone={runAnalysis}
             isStreaming={isStreaming}
           />
+          </div>
         )}
 
         {current.stage === "scanning" && (
-          <ScanningStage
-            ideaSummary={current.ideaSummary ?? ""}
-            error={error}
-            onRetry={
-              error
-                ? () => {
-                    setError(null);
-                    runAnalysis(current.ideaSummary ?? "");
-                  }
-                : undefined
-            }
-          />
+          <div className="flex-1 overflow-y-auto">
+            <ScanningStage
+              ideaSummary={current.ideaSummary ?? ""}
+              error={error}
+              onRetry={
+                error
+                  ? () => {
+                      setError(null);
+                      runAnalysis(current.ideaSummary ?? "");
+                    }
+                  : undefined
+              }
+            />
+          </div>
         )}
 
         {current.stage === "report" && current.report && (
-          <ReportStage
-            key={current.id}
-            report={current.report}
-            competitors={current.competitors}
-            ideaSummary={current.ideaSummary ?? ""}
-            redTeamReport={current.redTeamReport ?? null}
-            isRedTeamLoading={isRedTeamLoading}
-            redTeamError={redTeamError}
-            onRestart={handleNew}
-            onRefine={refineAnalysis}
-            onRedTeam={runRedTeam}
-          />
+          <div className="flex-1 overflow-y-auto">
+            <ReportStage
+              key={current.id}
+              report={current.report}
+              competitors={current.competitors}
+              ideaSummary={current.ideaSummary ?? ""}
+              redTeamReport={current.redTeamReport ?? null}
+              isRedTeamLoading={isRedTeamLoading}
+              redTeamError={redTeamError}
+              onRestart={handleNew}
+              onRefine={refineAnalysis}
+              onRedTeam={runRedTeam}
+            />
+          </div>
         )}
       </main>
     </div>
