@@ -81,6 +81,126 @@ function ScoreRing({ value, label }: { value: number; label: string }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Word-level diff utility (no external dependency)
+// ---------------------------------------------------------------------------
+
+type DiffChunk =
+  | { type: "equal"; text: string }
+  | { type: "add"; text: string }
+  | { type: "remove"; text: string };
+
+/**
+ * Myers-inspired O(n) word diff. Splits on whitespace so we compare words
+ * rather than characters — produces a more readable result for prose edits.
+ */
+function wordDiff(original: string, revised: string): DiffChunk[] {
+  const a = original.split(/(\s+)/);
+  const b = revised.split(/(\s+)/);
+
+  // LCS-based diff via dynamic programming
+  const m = a.length;
+  const n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () =>
+    new Array(n + 1).fill(0)
+  );
+
+  for (let i = m - 1; i >= 0; i--) {
+    for (let j = n - 1; j >= 0; j--) {
+      if (a[i] === b[j]) {
+        dp[i][j] = 1 + dp[i + 1][j + 1];
+      } else {
+        dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
+      }
+    }
+  }
+
+  const chunks: DiffChunk[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < m || j < n) {
+    if (i < m && j < n && a[i] === b[j]) {
+      chunks.push({ type: "equal", text: a[i] });
+      i++;
+      j++;
+    } else if (j < n && (i >= m || dp[i][j + 1] >= dp[i + 1][j])) {
+      chunks.push({ type: "add", text: b[j] });
+      j++;
+    } else {
+      chunks.push({ type: "remove", text: a[i] });
+      i++;
+    }
+  }
+
+  // Merge consecutive same-type chunks for cleaner rendering.
+  const merged: DiffChunk[] = [];
+  for (const chunk of chunks) {
+    const last = merged[merged.length - 1];
+    if (last && last.type === chunk.type) {
+      last.text += chunk.text;
+    } else {
+      merged.push({ ...chunk });
+    }
+  }
+  return merged;
+}
+
+/**
+ * Renders a word-level diff between `original` and `revised`.
+ * - Green background + underline → additions
+ * - Red background + strikethrough → deletions
+ * - Plain text → unchanged
+ *
+ * Hidden when the two strings are identical (nothing to show).
+ */
+function WordDiff({
+  original,
+  revised,
+}: {
+  original: string;
+  revised: string;
+}) {
+  if (!original || !revised || original.trim() === revised.trim()) return null;
+
+  const chunks = wordDiff(original.trim(), revised.trim());
+  const hasChanges = chunks.some((c) => c.type !== "equal");
+  if (!hasChanges) return null;
+
+  return (
+    <div className="rounded-lg border border-[color:var(--border)] bg-[color:var(--background)] px-3 py-2.5 text-sm leading-relaxed">
+      <div className="text-xs text-[color:var(--muted)] mb-2 font-medium uppercase tracking-wider">
+        Changes preview
+      </div>
+      <p className="text-[color:var(--foreground)] whitespace-pre-wrap break-words">
+        {chunks.map((chunk, i) => {
+          if (chunk.type === "equal") {
+            return <span key={i}>{chunk.text}</span>;
+          }
+          if (chunk.type === "add") {
+            return (
+              <span
+                key={i}
+                className="bg-green-500/15 text-green-700 dark:text-green-400 underline decoration-green-500/60 rounded-sm"
+              >
+                {chunk.text}
+              </span>
+            );
+          }
+          // remove
+          return (
+            <span
+              key={i}
+              className="bg-red-500/15 text-red-700 dark:text-red-400 line-through decoration-red-500/60 rounded-sm"
+            >
+              {chunk.text}
+            </span>
+          );
+        })}
+      </p>
+    </div>
+  );
+}
+
 export default function ReportStage({
   report,
   competitors,
@@ -177,6 +297,8 @@ export default function ReportStage({
             rows={4}
             className="w-full resize-y rounded-lg border border-[color:var(--border)] bg-[color:var(--background)] px-3 py-2 text-sm focus:outline-none focus:border-[color:var(--accent)] focus:ring-2 focus:ring-[color:var(--accent)]/20"
           />
+          {/* Live diff preview — shows what changed vs. the original pitch */}
+          <WordDiff original={ideaSummary} revised={refineDraft} />
           <div className="flex items-center justify-end gap-2">
             <button
               onClick={() => setRefineOpen(false)}
