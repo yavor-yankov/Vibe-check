@@ -4,7 +4,9 @@ import { createSupabaseProxyClient } from "@/lib/supabase/proxy";
 // Routes that stay accessible without a session. /api/billing/webhook is
 // here because Stripe calls it externally with no cookies — it
 // authenticates via the Stripe-Signature header instead.
+// "/" is public so unauthenticated visitors see the landing page.
 const PUBLIC_PATHS = [
+  "/",
   "/signin",
   "/auth/callback",
   "/api/auth",
@@ -12,11 +14,14 @@ const PUBLIC_PATHS = [
   "/pricing",
   "/terms",
   "/privacy",
+  "/opengraph-image",
+  "/robots.txt",
+  "/sitemap.xml",
 ];
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some(
-    (p) => pathname === p || pathname.startsWith(`${p}/`)
+    (p) => pathname === p || (p !== "/" && pathname.startsWith(`${p}/`))
   );
 }
 
@@ -37,7 +42,7 @@ function redirectPreservingCookies(
   return redirect;
 }
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { supabase, response } = createSupabaseProxyClient(request);
 
   // Touching getUser() refreshes the session cookies if they're close to
@@ -49,18 +54,19 @@ export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
   if (isPublicPath(pathname)) {
-    // Bounce signed-in users away from /signin to the app root.
-    if (user && pathname.startsWith("/signin")) {
-      return redirectPreservingCookies(new URL("/", request.url), response);
+    // Bounce signed-in users away from /signin or / to the dashboard.
+    if (user && (pathname === "/" || pathname.startsWith("/signin"))) {
+      return redirectPreservingCookies(
+        new URL("/dashboard", request.url),
+        response
+      );
     }
     return response;
   }
 
   if (!user) {
     const signinUrl = new URL("/signin", request.url);
-    if (pathname !== "/") {
-      signinUrl.searchParams.set("next", `${pathname}${search}`);
-    }
+    signinUrl.searchParams.set("next", `${pathname}${search}`);
     return redirectPreservingCookies(signinUrl, response);
   }
 
@@ -70,5 +76,7 @@ export async function proxy(request: NextRequest) {
 export const config = {
   // Skip static assets and Next internals — everything else is either
   // a page or an API route that needs the session cookie refresh.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+  ],
 };

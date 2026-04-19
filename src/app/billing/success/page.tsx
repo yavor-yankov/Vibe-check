@@ -25,7 +25,7 @@ export default function BillingSuccessPage() {
           indicator hasn&apos;t flipped yet.
         </p>
         <Link
-          href="/"
+          href="/dashboard"
           className="mt-6 inline-block rounded-lg bg-[color:var(--accent)] text-white px-5 py-2.5 text-sm font-medium hover:brightness-110 transition"
         >
           Open Vibe Check
