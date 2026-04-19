@@ -1,6 +1,7 @@
 "use client";
 
-import { Menu, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { Menu, Plus, Search, Sparkles, Trash2, X } from "lucide-react";
+import { useState, useMemo } from "react";
 import type { Session } from "@/lib/types";
 import UserBadge from "./UserBadge";
 import UsageBadge from "./UsageBadge";
@@ -24,6 +25,17 @@ interface SidebarProps {
   usageRefreshSignal?: number;
 }
 
+type VerdictFilter = "all" | "build_it" | "iterate" | "rethink" | "skip" | "in_progress";
+
+const VERDICT_LABELS: Record<VerdictFilter, string> = {
+  all: "All",
+  build_it: "✅ Build",
+  iterate: "🔄 Iterate",
+  rethink: "🤔 Rethink",
+  skip: "❌ Skip",
+  in_progress: "⏳ In progress",
+};
+
 function relative(ts: number): string {
   const diff = Date.now() - ts;
   const m = Math.floor(diff / 60000);
@@ -46,6 +58,9 @@ export default function Sidebar({
   onOpen,
   usageRefreshSignal,
 }: SidebarProps) {
+  const [query, setQuery] = useState("");
+  const [verdictFilter, setVerdictFilter] = useState<VerdictFilter>("all");
+
   const handleSelect = (id: string) => {
     onSelect(id);
     onClose?.(); // close drawer on mobile after selecting a session
@@ -55,6 +70,47 @@ export default function Sidebar({
     onNew();
     onClose?.();
   };
+
+  /** Filtered + searched sessions list */
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return sessions.filter((s) => {
+      // Search filter
+      if (q && !s.title.toLowerCase().includes(q)) return false;
+      // Verdict filter
+      if (verdictFilter !== "all") {
+        if (verdictFilter === "in_progress") {
+          return !s.report;
+        }
+        return s.report?.verdict === verdictFilter;
+      }
+      return true;
+    });
+  }, [sessions, query, verdictFilter]);
+
+  // Only show filter chips when there are enough sessions to warrant it.
+  const showFilters = sessions.length > 3;
+
+  // Count sessions per verdict for filter chip badges.
+  const counts = useMemo(() => {
+    const c: Record<VerdictFilter, number> = {
+      all: sessions.length,
+      build_it: 0,
+      iterate: 0,
+      rethink: 0,
+      skip: 0,
+      in_progress: 0,
+    };
+    for (const s of sessions) {
+      if (!s.report) {
+        c.in_progress++;
+      } else {
+        const v = s.report.verdict as VerdictFilter;
+        if (v in c) c[v]++;
+      }
+    }
+    return c;
+  }, [sessions]);
 
   return (
     <>
@@ -111,18 +167,73 @@ export default function Sidebar({
           New vibe check
         </button>
 
-        <div className="px-4 pt-6 pb-2 text-xs uppercase tracking-wider text-[color:var(--muted)] font-medium">
-          Saved sessions
+        {/* ── Idea Library search + filters ── */}
+        <div className="px-3 pt-4 pb-2 space-y-2">
+          {/* Search box */}
+          <div className="relative">
+            <Search
+              size={13}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[color:var(--muted)] pointer-events-none"
+            />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search sessions…"
+              className="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-[color:var(--border)] bg-[color:var(--background)] text-[color:var(--foreground)] placeholder:text-[color:var(--muted)] focus:outline-none focus:border-[color:var(--accent)] focus:ring-1 focus:ring-[color:var(--accent)]/30"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
+                aria-label="Clear search"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          {/* Verdict filter chips — only shown when there's enough data */}
+          {showFilters && (
+            <div className="flex flex-wrap gap-1">
+              {(["all", "build_it", "iterate", "rethink", "skip", "in_progress"] as VerdictFilter[])
+                .filter((v) => v === "all" || counts[v] > 0)
+                .map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setVerdictFilter(v === verdictFilter ? "all" : v)}
+                    className={`text-[11px] px-2 py-0.5 rounded-full border transition ${
+                      verdictFilter === v
+                        ? "bg-[color:var(--accent)] text-white border-[color:var(--accent)]"
+                        : "border-[color:var(--border)] text-[color:var(--muted)] hover:border-[color:var(--accent)] hover:text-[color:var(--foreground)]"
+                    }`}
+                  >
+                    {VERDICT_LABELS[v]}
+                    {v !== "all" && (
+                      <span className="ml-1 opacity-70">{counts[v]}</span>
+                    )}
+                  </button>
+                ))}
+            </div>
+          )}
         </div>
 
+        {/* Session list */}
         <div className="flex-1 overflow-y-auto px-2 pb-4">
           {sessions.length === 0 ? (
             <div className="px-3 py-6 text-sm text-[color:var(--muted)] text-center">
               No sessions yet. Start your first vibe check above.
             </div>
+          ) : visible.length === 0 ? (
+            <div className="px-3 py-6 text-sm text-[color:var(--muted)] text-center">
+              No sessions match
+              {query ? ` "${query}"` : ""}{verdictFilter !== "all" ? ` with verdict "${VERDICT_LABELS[verdictFilter]}"` : ""}.
+            </div>
           ) : (
             <ul className="space-y-1">
-              {sessions.map((s) => (
+              {visible.map((s) => (
                 <li key={s.id}>
                   <div
                     className={`group flex items-start gap-2 rounded-lg px-3 py-2 cursor-pointer transition ${

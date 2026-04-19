@@ -46,5 +46,8 @@ jobs:
           NEXT_PUBLIC_APP_URL: https://placeholder.example.com
         run: pnpm build
 
+      - name: Unit tests
+        run: pnpm test
+
       - name: Lint
         run: pnpm lint || true   # advisory only until lint rules are stabilised
