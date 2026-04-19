@@ -14,6 +14,9 @@ import "server-only";
 
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ module: "rate-limit" });
 
 // Singleton — shared across all route handler invocations in the same
 // Node worker process.  Next.js hot-reloads reset this in dev, which is fine.
@@ -30,9 +33,7 @@ function getRateLimiter(): Ratelimit | null {
     // Env vars absent — disable silently.
     rateLimiter = null as unknown as Ratelimit; // sentinel to avoid re-checking
     rateLimiterEnabled = false;
-    console.info(
-      "[rate-limit] UPSTASH_REDIS_REST_URL/TOKEN not set — rate limiting disabled"
-    );
+    log.info("UPSTASH_REDIS_REST_URL/TOKEN not set — rate limiting disabled");
     return null;
   }
 
@@ -45,9 +46,9 @@ function getRateLimiter(): Ratelimit | null {
       prefix: "vibe-check:rl",
     });
     rateLimiterEnabled = true;
-    console.info("[rate-limit] Upstash rate limiter initialised (20 req/min)");
+    log.info("Upstash rate limiter initialised (20 req/min)");
   } catch (err) {
-    console.error("[rate-limit] Failed to initialise — disabling", err);
+    log.error({ err }, "Failed to initialise rate limiter — disabling");
     rateLimiter = null as unknown as Ratelimit;
     rateLimiterEnabled = false;
   }
@@ -85,7 +86,7 @@ export async function checkRateLimit(
   } catch (err) {
     // Redis unavailable — fail open so a transient Redis outage doesn't
     // take the whole app down.
-    console.error("[rate-limit] Redis error — allowing request through", err);
+    log.error({ err }, "Redis error — allowing request through (fail-open)");
     return null;
   }
 }

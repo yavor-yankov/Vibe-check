@@ -1,4 +1,7 @@
 import { NextRequest } from "next/server";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "/api/search" });
 import { getGeminiClient, modelForTier } from "@/lib/gemini";
 import { SEARCH_QUERY_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
@@ -160,7 +163,7 @@ export async function POST(request: NextRequest) {
         batch = await duckduckgoSearch(q);
       }
     } catch (err) {
-      console.error("search error", err);
+      log.error({ err, query: q }, "Search error — falling back to DuckDuckGo");
       // fallback to ddg if tavily fails
       if (tavilyKey) {
         try {
