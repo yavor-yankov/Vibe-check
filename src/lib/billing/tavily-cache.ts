@@ -1,3 +1,4 @@
+import "server-only";
 /**
  * Thin cache around Tavily. Uses the service-role client because the
  * tavily_cache table is locked down behind RLS (no policies), so anon

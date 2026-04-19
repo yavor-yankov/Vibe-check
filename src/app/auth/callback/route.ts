@@ -12,7 +12,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/";
+  const next = searchParams.get("next") ?? "/dashboard";
   const errorDescription = searchParams.get("error_description");
 
   if (errorDescription) {
@@ -37,6 +37,6 @@ export async function GET(request: NextRequest) {
   // Only accept same-origin relative paths for `next` — otherwise
   // `new URL("https://evil.com", origin)` resolves to the attacker URL,
   // giving us an open redirect / phishing vector.
-  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/";
+  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
   return NextResponse.redirect(new URL(safeNext, origin));
 }
