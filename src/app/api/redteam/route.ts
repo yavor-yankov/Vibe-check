@@ -3,6 +3,7 @@ import { getGeminiClient, modelForTier } from "@/lib/gemini";
 import { RED_TEAM_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { RedTeamBodySchema, parseBody } from "@/lib/validation";
+import { checkRateLimit, rateLimitExceededResponse } from "@/lib/rate-limit";
 import type { RedTeamReport } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -38,6 +39,10 @@ export async function POST(request: NextRequest) {
   if (!plan) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
+
+  // Rate limiting — 20 req/min per user. Disabled when Upstash env vars absent.
+  const rl = await checkRateLimit(plan.userId);
+  if (rl && !rl.success) return rateLimitExceededResponse(rl.reset);
 
   let client;
   try {

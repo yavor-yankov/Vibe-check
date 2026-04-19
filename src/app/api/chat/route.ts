@@ -3,6 +3,7 @@ import { getGeminiClient, modelForTier } from "@/lib/gemini";
 import { INTERVIEW_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { ChatBodySchema, parseBody } from "@/lib/validation";
+import { checkRateLimit, rateLimitExceededResponse } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -35,6 +36,10 @@ export async function POST(request: NextRequest) {
       { status: 401, headers: { "Content-Type": "application/json" } }
     );
   }
+
+  // Rate limiting — 20 req/min per user. Disabled when Upstash env vars absent.
+  const rl = await checkRateLimit(plan.userId);
+  if (rl && !rl.success) return rateLimitExceededResponse(rl.reset);
 
   let client;
   try {

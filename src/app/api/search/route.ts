@@ -7,6 +7,7 @@ import {
   writeCachedSearch,
 } from "@/lib/billing/tavily-cache";
 import { SearchBodySchema, parseBody } from "@/lib/validation";
+import { checkRateLimit, rateLimitExceededResponse } from "@/lib/rate-limit";
 import type { Competitor } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -122,6 +123,10 @@ export async function POST(request: NextRequest) {
   if (!plan) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
+
+  // Rate limiting — 20 req/min per user. Disabled when Upstash env vars absent.
+  const rl = await checkRateLimit(plan.userId);
+  if (rl && !rl.success) return rateLimitExceededResponse(rl.reset);
 
   const queries = await generateSearchQueries(
     ideaSummary,
