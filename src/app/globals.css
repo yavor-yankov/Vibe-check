@@ -64,3 +64,60 @@ html, body {
 .typing-dot { animation: pulseDots 1.2s infinite ease-in-out; }
 .typing-dot:nth-child(2) { animation-delay: 0.15s; }
 .typing-dot:nth-child(3) { animation-delay: 0.3s; }
+
+/* =========================================================
+   Print / PDF export styles
+   ========================================================= */
+@media print {
+  /* Hide everything except the report content */
+  aside,
+  header,
+  nav,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Ensure the report fills the page */
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 12pt;
+  }
+
+  /* Remove decorative animations in print */
+  .fade-in-up {
+    animation: none !important;
+  }
+
+  /* Give the report more room and remove card shadows */
+  .max-w-4xl {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Ensure score rings print with colors */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Page breaks: avoid splitting cards across pages */
+  section,
+  .space-y-8 > * {
+    break-inside: avoid;
+  }
+
+  /* Expand collapsed sections in print (e.g. competitor list) */
+  details {
+    display: block !important;
+  }
+  details > * {
+    display: block !important;
+  }
+
+  /* Footer watermark */
+  @page {
+    margin: 2cm;
+  }
+}

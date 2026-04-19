@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Download,
   ExternalLink,
   Flame,
   Layers,
@@ -96,6 +97,15 @@ export default function ReportStage({
   const [refineDraft, setRefineDraft] = useState(ideaSummary);
   const [redTeamOpen, setRedTeamOpen] = useState(false);
 
+  function handleExportPdf() {
+    // Store the original title, swap to the report label so the browser's
+    // "Save as PDF" dialog prefills a meaningful filename, then restore.
+    const original = document.title;
+    document.title = `Vibe Check — ${report.verdictLabel}`;
+    window.print();
+    document.title = original;
+  }
+
   function submitRefine() {
     const trimmed = refineDraft.trim();
     if (!trimmed || trimmed === ideaSummary.trim()) return;
@@ -125,7 +135,15 @@ export default function ReportStage({
           </h1>
           <p className="text-[color:var(--muted)] max-w-2xl">{report.summary}</p>
         </div>
-        <div className="shrink-0 flex items-center gap-2">
+        <div className="shrink-0 flex items-center gap-2 print:hidden">
+          <button
+            onClick={handleExportPdf}
+            className="inline-flex items-center gap-2 rounded-lg border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[color:var(--card)] transition"
+            title="Export report as PDF"
+          >
+            <Download size={14} />
+            Export PDF
+          </button>
           <button
             onClick={() => {
               setRefineDraft(ideaSummary);
