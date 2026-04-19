@@ -44,6 +44,8 @@ jobs:
           STRIPE_PRICE_PRO: price_placeholder
           STRIPE_PRICE_LIFETIME: price_placeholder
           NEXT_PUBLIC_APP_URL: https://placeholder.example.com
+          RESEND_API_KEY: re_placeholder
+          EMAIL_FROM: Vibe Check <noreply@placeholder.example.com>
         run: pnpm build
 
       - name: Unit tests
