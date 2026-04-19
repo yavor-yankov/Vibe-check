@@ -3,6 +3,7 @@ import { getGeminiClient, modelForTier } from "@/lib/gemini";
 import { ANALYSIS_SYSTEM_PROMPT } from "@/lib/prompts";
 import { consumeUsage, refundUsage } from "@/lib/billing/usage";
 import { AnalyzeBodySchema, parseBody } from "@/lib/validation";
+import { checkRateLimit, rateLimitExceededResponse } from "@/lib/rate-limit";
 import type { AnalysisReport, ExpandedInsights } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -190,6 +191,15 @@ export async function POST(request: NextRequest) {
       { error: msg },
       { status: isAuthError ? 401 : 500 }
     );
+  }
+
+  // Rate limiting — 20 req/min per user. Checked after quota so a failed
+  // quota check doesn't consume a rate-limit slot.
+  const rl = await checkRateLimit(plan.userId);
+  if (rl && !rl.success) {
+    // Roll back the consumed quota slot — the request won't proceed.
+    await refundUsage(plan.userId, plan.usageMonth);
+    return rateLimitExceededResponse(rl.reset);
   }
 
   const transcript = (messages ?? [])
