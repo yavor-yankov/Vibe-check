@@ -99,11 +99,24 @@ export default function SignInForm() {
         }
         router.replace(next);
         router.refresh();
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const message =
+          err instanceof Error ? err.message : "Failed to complete sign-in.";
+        setStatus({ kind: "error", message });
       });
     return () => {
       cancelled = true;
     };
   }, [hashResult, next, router]);
+
+  // While we're finishing the magic-link token exchange, block the other
+  // sign-in buttons. Navigating away (e.g. clicking Google) would unmount
+  // this component and abort the in-flight `setSession` — and since the
+  // tokens have already been stripped from the URL, they'd be lost with
+  // no way to recover without requesting a new link.
+  const completing = status.kind === "completing";
 
   const callbackUrl = (extra: string) =>
     typeof window !== "undefined"
@@ -169,7 +182,7 @@ export default function SignInForm() {
       <button
         type="button"
         onClick={handleGoogle}
-        disabled={googleLoading || status.kind === "sending"}
+        disabled={googleLoading || status.kind === "sending" || completing}
         className="w-full flex items-center justify-center gap-3 rounded-lg border border-[color:var(--border)] bg-[color:var(--background)] py-2.5 px-4 text-sm font-medium hover:bg-[color:var(--card)] transition disabled:opacity-60 disabled:cursor-not-allowed mb-4"
       >
         <GoogleIcon />
