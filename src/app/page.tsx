@@ -1,589 +1,626 @@
-"use client";
-
-import { useCallback, useEffect, useRef, useState } from "react";
-import IntroStage from "@/components/IntroStage";
-import InterviewStage, {
-  buildAssistantMessage,
-  buildUserMessage,
-} from "@/components/InterviewStage";
-import ScanningStage from "@/components/ScanningStage";
-import ReportStage from "@/components/ReportStage";
-import Sidebar from "@/components/Sidebar";
-import type {
-  AnalysisReport,
-  ChatMessage,
-  RedTeamReport,
-  Session,
-} from "@/lib/types";
-import { loadSessions as loadLocalSessions, newSession } from "@/lib/storage";
+import Link from "next/link";
 import {
-  deleteSessionRemote,
-  fetchSessions,
-  persistSession,
-} from "@/lib/client/sessions-api";
+  Sparkles,
+  MessageSquare,
+  Globe,
+  BarChart3,
+  Shield,
+  Zap,
+  TrendingUp,
+  Check,
+  ChevronDown,
+  ArrowRight,
+  Star,
+} from "lucide-react";
+import { PRICING_TIERS } from "@/lib/billing/plan";
 
-const MIGRATION_FLAG = "vibe-check-migrated-v1";
+// ─── Hero ─────────────────────────────────────────────────────────────────────
 
-export default function Home() {
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [current, setCurrent] = useState<Session | null>(null);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isRedTeamLoading, setIsRedTeamLoading] = useState(false);
-  const [redTeamError, setRedTeamError] = useState<string | null>(null);
-  const [isHydrated, setIsHydrated] = useState(false);
-  // Mobile sidebar drawer state
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  // Incrementing this counter signals UsageBadge to re-fetch the quota
-  // after each vibe check is consumed.
-  const [usageRefreshSignal, setUsageRefreshSignal] = useState(0);
+function Hero() {
+  return (
+    <section className="relative overflow-hidden pt-24 pb-20 px-6 text-center">
+      {/* Ambient glow blobs */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10"
+        style={{
+          background:
+            "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(249,115,22,0.15) 0%, transparent 70%)",
+        }}
+      />
 
-  // Keep a ref to the latest active session so async callbacks don't
-  // act on stale closures (e.g. runRedTeam finishing after the user
-  // switched sessions or hit "New check").
-  const currentRef = useRef<Session | null>(null);
-  useEffect(() => {
-    currentRef.current = current;
-  }, [current]);
-  // Mirrors `sessions` so async callbacks (e.g. runRedTeam returning
-  // after a session switch) can find a target session by id without
-  // needing a re-fetch from the server.
-  const sessionsRef = useRef<Session[]>([]);
-  useEffect(() => {
-    sessionsRef.current = sessions;
-  }, [sessions]);
+      <div className="mx-auto max-w-3xl">
+        {/* Badge */}
+        <div className="inline-flex items-center gap-2 rounded-full border border-[color:var(--accent)]/30 bg-[color:var(--accent)]/10 px-3 py-1 text-xs font-medium text-[color:var(--accent)] mb-6">
+          <Star size={12} fill="currentColor" />
+          Interview-style AI for founders &amp; builders
+        </div>
 
-  // Per-session write queue. `persistSession` does a non-atomic
-  // delete-then-insert on messages/competitors/etc., so two concurrent
-  // writes for the same session can interleave and wipe rows from the
-  // newer write. Chain every persist for a given session id onto the
-  // previous one so they execute strictly in order.
-  const persistQueueRef = useRef<Map<string, Promise<unknown>>>(new Map());
+        <h1 className="text-5xl md:text-6xl font-bold tracking-tight leading-tight">
+          Is your app idea{" "}
+          <span
+            style={{
+              background:
+                "linear-gradient(135deg, #f97316 0%, #fb923c 50%, #fdba74 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+            }}
+          >
+            worth building?
+          </span>
+        </h1>
 
-  // Hydrate from Postgres on mount. If it's empty and the browser has
-  // legacy localStorage sessions, migrate them once.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        let remote = await fetchSessions();
-        // Always try the migration path — it's flag-guarded and persistSession
-        // is an idempotent upsert, so re-running won't duplicate. Skipping
-        // this when remote is non-empty would strand any half-migrated
-        // sessions from a previous failed attempt permanently in localStorage.
-        if (!cancelled) {
-          const existingIds = new Set(remote.map((s) => s.id));
-          const migrated = await migrateLocalStorageIfNeeded(existingIds);
-          if (migrated.length > 0) {
-            remote = [...remote, ...migrated].sort(
-              (a, b) => b.updatedAt - a.updatedAt
-            );
-          }
-        }
-        if (cancelled) return;
-        setSessions(remote);
-        setCurrent(remote[0] ?? newSession());
-      } catch (err) {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Failed to load sessions");
-        setCurrent(newSession());
-      } finally {
-        if (!cancelled) setIsHydrated(true);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+        <p className="mt-5 text-xl text-[color:var(--muted)] max-w-2xl mx-auto leading-relaxed">
+          Vibe Check pressure-tests your app concept with a Socratic AI
+          interview, scans the web for real competitors, and delivers a
+          scored report with a devil&apos;s-advocate red-team pass — in
+          under 5 minutes.
+        </p>
 
-  /**
-   * Write a session to the sessions list + server. If it matches the
-   * currently-active session we also update `current` so the UI reflects
-   * the change immediately. For async callbacks that fire after the user
-   * has switched to another session (e.g. a slow red-team response), pass
-   * `{ updateCurrent: false }` so we don't yank them back.
-   */
-  const persist = useCallback(
-    (s: Session, opts: { updateCurrent?: boolean } = {}) => {
-      const { updateCurrent = true } = opts;
-      const stamped: Session = { ...s, updatedAt: Date.now() };
-      if (updateCurrent) setCurrent(stamped);
-      setSessions((prev) => {
-        const idx = prev.findIndex((x) => x.id === stamped.id);
-        if (idx >= 0) {
-          const next = [...prev];
-          next[idx] = stamped;
-          return next.sort((a, b) => b.updatedAt - a.updatedAt);
-        }
-        return [stamped, ...prev];
-      });
-      // Fire server write in the background, but chain it onto any
-      // in-flight write for the same session so concurrent calls never
-      // interleave inside upsertSessionFull.
-      const queue = persistQueueRef.current;
-      const prev = queue.get(stamped.id) ?? Promise.resolve();
-      const next = prev
-        .catch(() => {
-          /* previous write's error was already surfaced; don't chain-cancel */
-        })
-        .then(() => persistSession(stamped))
-        .catch((err) => {
-          setError(
-            err instanceof Error
-              ? `Save failed: ${err.message}`
-              : "Save failed"
-          );
-        })
-        .finally(() => {
-          // Only clear the tail if nothing newer has been chained on.
-          if (queue.get(stamped.id) === next) queue.delete(stamped.id);
-        });
-      queue.set(stamped.id, next);
-    },
-    []
-  );
+        <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <Link
+            href="/signin"
+            className="inline-flex items-center gap-2 rounded-xl bg-[color:var(--accent)] text-white px-6 py-3 text-base font-semibold hover:brightness-110 transition shadow-lg shadow-[color:var(--accent)]/20"
+          >
+            Start free — no card needed
+            <ArrowRight size={18} />
+          </Link>
+          <Link
+            href="/pricing"
+            className="inline-flex items-center gap-2 rounded-xl border border-[color:var(--border)] bg-[color:var(--card)] px-6 py-3 text-base font-medium hover:bg-[color:var(--background)] transition"
+          >
+            See pricing
+          </Link>
+        </div>
 
-  const resetRedTeamState = () => {
-    setIsRedTeamLoading(false);
-    setRedTeamError(null);
-  };
-
-  const handleNew = () => {
-    const s = newSession();
-    setCurrent(s);
-    setError(null);
-    resetRedTeamState();
-  };
-
-  const handleSelect = (id: string) => {
-    const s = sessions.find((x) => x.id === id);
-    if (s) {
-      setCurrent(s);
-      setError(null);
-      resetRedTeamState();
-    }
-  };
-
-  const handleDelete = (id: string) => {
-    setSessions((prev) => {
-      const next = prev.filter((s) => s.id !== id);
-      // Pick the next-current session from the post-delete list inside
-      // the updater so we never read a stale `sessions` closure (a
-      // background persistSession could have queued an updater that
-      // reordered the list before this delete ran).
-      if (current?.id === id) {
-        setCurrent(next[0] ?? newSession());
-        resetRedTeamState();
-      }
-      return next;
-    });
-    // Chain the server DELETE onto any in-flight persist for this id so
-    // a queued upsert can't resurrect the session after the DELETE lands.
-    const queue = persistQueueRef.current;
-    const prev = queue.get(id) ?? Promise.resolve();
-    const next = prev
-      .catch(() => {
-        /* previous write's error was already surfaced */
-      })
-      .then(() => deleteSessionRemote(id))
-      .catch((err) => {
-        setError(
-          err instanceof Error
-            ? `Delete failed: ${err.message}`
-            : "Delete failed"
-        );
-      })
-      .finally(() => {
-        if (queue.get(id) === next) queue.delete(id);
-      });
-    queue.set(id, next);
-  };
-
-  const startInterview = async (seed: string) => {
-    if (!current) return;
-    setError(null);
-    const userMsg = buildUserMessage(seed);
-    const next: Session = {
-      ...current,
-      title: seed.slice(0, 60),
-      stage: "interview",
-      messages: [userMsg],
-    };
-    persist(next);
-    await streamAssistantReply(next);
-  };
-
-  const sendInterviewAnswer = async (text: string) => {
-    if (!current) return;
-    const userMsg = buildUserMessage(text);
-    const next: Session = {
-      ...current,
-      messages: [...current.messages, userMsg],
-    };
-    persist(next);
-    await streamAssistantReply(next);
-  };
-
-  const streamAssistantReply = async (sessionWithUser: Session) => {
-    setIsStreaming(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: sessionWithUser.messages }),
-      });
-      if (!res.ok || !res.body) {
-        const msg = await res.text().catch(() => "");
-        throw new Error(
-          `Chat API failed (${res.status}). ${msg || "Check GEMINI_API_KEY."}`
-        );
-      }
-      const assistantMsg = buildAssistantMessage("");
-      let working: Session = {
-        ...sessionWithUser,
-        messages: [...sessionWithUser.messages, assistantMsg],
-      };
-      setCurrent(working);
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let acc = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        acc += decoder.decode(value, { stream: true });
-        const updated: ChatMessage = { ...assistantMsg, content: acc };
-        working = {
-          ...working,
-          messages: [...sessionWithUser.messages, updated],
-        };
-        setCurrent(working);
-      }
-      // final persist
-      persist(working);
-
-      // Auto-generate a meaningful session title after the FIRST assistant
-      // reply. At this point sessionWithUser.messages has exactly 1 entry
-      // (the user's seed idea). Fire-and-forget — a failed title call must
-      // never break the interview flow.
-      if (sessionWithUser.messages.length === 1) {
-        const seed = sessionWithUser.messages[0]?.content ?? "";
-        void (async () => {
-          try {
-            const res = await fetch("/api/title", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ seed }),
-            });
-            if (res.ok) {
-              const { title } = (await res.json()) as { title?: string | null };
-              if (title) {
-                const titled: Session = { ...working, title };
-                // Only apply if the user is still on this session.
-                setCurrent((prev) =>
-                  prev?.id === titled.id ? titled : prev
-                );
-                setSessions((prev) =>
-                  prev.map((s) => (s.id === titled.id ? titled : s))
-                );
-                persist(titled);
-              }
-            }
-          } catch {
-            // Non-fatal — sidebar label stays as seed truncation.
-          }
-        })();
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Unknown error";
-      setError(msg);
-    } finally {
-      setIsStreaming(false);
-    }
-  };
-
-  const analyze = async (
-    scanning: Session,
-    revertStage: Session["stage"],
-    revertIdeaSummary?: string
-  ) => {
-    const ideaSummary = scanning.ideaSummary ?? "";
-    // 90-second hard cap on the whole scan (search + analyze). If either
-    // fetch hangs the user would otherwise see the spinner forever.
-    const abort = new AbortController();
-    const timeout = setTimeout(() => abort.abort(), 90_000);
-    try {
-      // 1. search competitors
-      const searchRes = await fetch("/api/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ideaSummary }),
-        signal: abort.signal,
-      });
-      const searchData = (await searchRes.json()) as {
-        competitors?: Session["competitors"];
-        error?: string;
-      };
-      if (!searchRes.ok) {
-        throw new Error(searchData.error || "Search failed");
-      }
-      const competitors = searchData.competitors ?? [];
-
-      // 2. analyze
-      const analyzeRes = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: scanning.messages,
-          ideaSummary,
-          competitors,
-        }),
-        signal: abort.signal,
-      });
-      const analyzeData = (await analyzeRes.json()) as {
-        report?: AnalysisReport;
-        error?: string;
-      };
-      if (!analyzeRes.ok || !analyzeData.report) {
-        throw new Error(analyzeData.error || "Analysis failed");
-      }
-
-      clearTimeout(timeout);
-      const done: Session = {
-        ...scanning,
-        stage: "report",
-        competitors,
-        report: analyzeData.report,
-        // Refining invalidates the prior red-team pass — force re-run.
-        redTeamReport: null,
-        reportGeneration: (scanning.reportGeneration ?? 0) + 1,
-      };
-      persist(done);
-      // Notify the sidebar UsageBadge that a quota slot was consumed.
-      setUsageRefreshSignal((n) => n + 1);
-    } catch (err) {
-      clearTimeout(timeout);
-      const isAbort = err instanceof DOMException && err.name === "AbortError";
-      const msg = isAbort
-        ? "Analysis timed out (90 s). Please try again."
-        : err instanceof Error
-          ? err.message
-          : "Unknown error";
-      setError(msg);
-      // revert so the user can retry from a sensible stage. If caller
-      // supplied an original ideaSummary (refine path), restore it so the
-      // report/competitors on screen stay in sync with the seed text the
-      // Re-score textarea is pre-filled with.
-      persist({
-        ...scanning,
-        stage: revertStage,
-        ideaSummary: revertIdeaSummary ?? scanning.ideaSummary,
-      });
-    }
-  };
-
-  const runAnalysis = async (ideaSummary: string) => {
-    if (!current) return;
-    setError(null);
-    const scanning: Session = {
-      ...current,
-      stage: "scanning",
-      ideaSummary,
-    };
-    persist(scanning);
-    await analyze(scanning, "interview");
-  };
-
-  const refineAnalysis = async (newSummary: string) => {
-    if (!current) return;
-    setError(null);
-    resetRedTeamState();
-    const originalSummary = current.ideaSummary;
-    const scanning: Session = {
-      ...current,
-      stage: "scanning",
-      ideaSummary: newSummary,
-    };
-    persist(scanning);
-    await analyze(scanning, "report", originalSummary);
-  };
-
-  const runRedTeam = async () => {
-    const snapshot = currentRef.current;
-    if (!snapshot || !snapshot.report) return;
-    const sessionId = snapshot.id;
-    const generationAtStart = snapshot.reportGeneration ?? 0;
-    setRedTeamError(null);
-    setIsRedTeamLoading(true);
-    try {
-      const res = await fetch("/api/redteam", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ideaSummary: snapshot.ideaSummary ?? "",
-          messages: snapshot.messages,
-          competitors: snapshot.competitors,
-          report: snapshot.report,
-        }),
-      });
-      const data = (await res.json()) as {
-        redTeam?: RedTeamReport;
-        error?: string;
-      };
-      if (!res.ok || !data.redTeam) {
-        throw new Error(data.error || "Red-team pass failed");
-      }
-      // Look up the target by id in the in-memory sessions list so we
-      // can save the red-team result even if the user has switched away
-      // to another session while the request was in flight (it can take
-      // 10+ seconds). We only update `current` when the user is still
-      // on that session — otherwise we'd yank them back.
-      const target = sessionsRef.current.find((s) => s.id === sessionId);
-      if (!target) return; // session was deleted
-      if ((target.reportGeneration ?? 0) !== generationAtStart) return;
-      const updated: Session = { ...target, redTeamReport: data.redTeam };
-      const stillActive = currentRef.current?.id === sessionId;
-      persist(updated, { updateCurrent: stillActive });
-    } catch (err) {
-      const live = currentRef.current;
-      if (
-        live?.id === sessionId &&
-        (live.reportGeneration ?? 0) === generationAtStart
-      ) {
-        const msg = err instanceof Error ? err.message : "Unknown error";
-        setRedTeamError(msg);
-      }
-    } finally {
-      const live = currentRef.current;
-      if (
-        live?.id === sessionId &&
-        (live.reportGeneration ?? 0) === generationAtStart
-      ) {
-        setIsRedTeamLoading(false);
-      }
-    }
-  };
-
-  if (!isHydrated || !current) {
-    return (
-      <div className="flex-1 grid place-items-center text-[color:var(--muted)]">
-        Loading…
+        <p className="mt-4 text-sm text-[color:var(--muted)]">
+          3 free checks per month · No credit card · Cancel anytime
+        </p>
       </div>
-    );
-  }
+
+      {/* Mock report card preview */}
+      <div className="mt-16 mx-auto max-w-2xl">
+        <MockReportPreview />
+      </div>
+    </section>
+  );
+}
+
+function MockReportPreview() {
+  const scores = [
+    { label: "Viability", value: 8 },
+    { label: "Problem fit", value: 9 },
+    { label: "Niche clarity", value: 7 },
+    { label: "Differentiation", value: 6 },
+  ];
 
   return (
-    <div className="flex flex-1 min-h-screen">
-      <Sidebar
-        sessions={sessions}
-        activeId={current.id}
-        onNew={handleNew}
-        onSelect={handleSelect}
-        onDelete={handleDelete}
-        isOpen={isSidebarOpen}
-        onOpen={() => setIsSidebarOpen(true)}
-        onClose={() => setIsSidebarOpen(false)}
-        usageRefreshSignal={usageRefreshSignal}
-      />
-      {/* On mobile, add top padding to clear the fixed hamburger button */}
-      <main className="flex-1 min-w-0 md:pt-0 pt-14">
-        {error && (
-          <div className="px-6 pt-4">
-            <div className="max-w-3xl mx-auto rounded-lg border border-[color:var(--bad)]/30 bg-[color:var(--bad)]/5 px-4 py-3 text-sm text-[color:var(--bad)]">
-              <b>Error:</b> {error}
+    <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--card)] shadow-2xl shadow-black/10 overflow-hidden text-left">
+      {/* Title bar */}
+      <div className="px-5 py-3.5 border-b border-[color:var(--border)] flex items-center gap-2">
+        <div className="w-3 h-3 rounded-full bg-[color:var(--bad)] opacity-80" />
+        <div className="w-3 h-3 rounded-full bg-[color:var(--warn)] opacity-80" />
+        <div className="w-3 h-3 rounded-full bg-[color:var(--good)] opacity-80" />
+        <span className="ml-2 text-xs text-[color:var(--muted)] font-mono">
+          vibe-check — report
+        </span>
+      </div>
+
+      <div className="p-5 grid gap-4 sm:grid-cols-2">
+        {/* Verdict */}
+        <div className="sm:col-span-2 flex items-center justify-between">
+          <div>
+            <div className="text-xs uppercase tracking-wider text-[color:var(--muted)] font-medium mb-1">
+              Verdict
+            </div>
+            <div className="text-lg font-bold text-[color:var(--good)]">
+              🚀 Ship the MVP
             </div>
           </div>
-        )}
+          <div className="text-right">
+            <div className="text-xs uppercase tracking-wider text-[color:var(--muted)] font-medium mb-1">
+              Overall score
+            </div>
+            <div className="text-3xl font-bold">7.5<span className="text-base text-[color:var(--muted)]">/10</span></div>
+          </div>
+        </div>
 
-        {current.stage === "intro" && <IntroStage onStart={startInterview} />}
+        {/* Score bars */}
+        {scores.map(({ label, value }) => (
+          <div key={label}>
+            <div className="flex justify-between text-xs mb-1.5">
+              <span className="text-[color:var(--muted)]">{label}</span>
+              <span className="font-semibold">{value}/10</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-[color:var(--border)] overflow-hidden">
+              <div
+                className="h-full rounded-full bg-[color:var(--accent)]"
+                style={{ width: `${value * 10}%` }}
+              />
+            </div>
+          </div>
+        ))}
 
-        {current.stage === "interview" && (
-          <InterviewStage
-            messages={current.messages}
-            onSend={sendInterviewAnswer}
-            onDone={runAnalysis}
-            isStreaming={isStreaming}
-          />
-        )}
-
-        {current.stage === "scanning" && (
-          <ScanningStage
-            ideaSummary={current.ideaSummary ?? ""}
-            error={error}
-            onRetry={
-              error
-                ? () => {
-                    setError(null);
-                    runAnalysis(current.ideaSummary ?? "");
-                  }
-                : undefined
-            }
-          />
-        )}
-
-        {current.stage === "report" && current.report && (
-          <ReportStage
-            key={current.id}
-            report={current.report}
-            competitors={current.competitors}
-            ideaSummary={current.ideaSummary ?? ""}
-            redTeamReport={current.redTeamReport ?? null}
-            isRedTeamLoading={isRedTeamLoading}
-            redTeamError={redTeamError}
-            onRestart={handleNew}
-            onRefine={refineAnalysis}
-            onRedTeam={runRedTeam}
-          />
-        )}
-      </main>
+        {/* Insight chips */}
+        <div className="sm:col-span-2 flex flex-wrap gap-2 pt-1">
+          {[
+            "Market: $2B–$8B",
+            "Build: 1–2 weeks",
+            "4 competitors found",
+            "Low regulatory risk",
+          ].map((chip) => (
+            <span
+              key={chip}
+              className="text-xs px-2.5 py-1 rounded-full border border-[color:var(--border)] text-[color:var(--muted)]"
+            >
+              {chip}
+            </span>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
 
-/**
- * One-time localStorage → Postgres migration.
- *
- * If this browser has legacy sessions saved under `vibe-check-sessions-v1`
- * and they haven't been uploaded yet, post them to `/api/sessions` so the
- * user doesn't lose their history when we switch away from localStorage.
- * Best-effort — failures are swallowed so the hard-wall sign-in UX still
- * works for brand-new users.
- *
- * Skips any session whose id is already on the server. Without that guard,
- * a retry on a partially-failed migration would `upsertSessionFull` the
- * original localStorage snapshot over any edits the user has made since
- * (messages, reports, etc.) — a silent destructive data loss.
- */
-async function migrateLocalStorageIfNeeded(
-  existingIds: Set<string>
-): Promise<Session[]> {
-  if (typeof window === "undefined") return [];
-  if (window.localStorage.getItem(MIGRATION_FLAG)) return [];
-  const legacy = loadLocalSessions();
-  if (legacy.length === 0) {
-    window.localStorage.setItem(MIGRATION_FLAG, String(Date.now()));
-    return [];
-  }
-  const migrated: Session[] = [];
-  let skippedCount = 0;
-  for (const s of legacy) {
-    if (existingIds.has(s.id)) {
-      // Already on the server from a prior partial migration — skip so
-      // we don't overwrite post-migration edits with stale data.
-      skippedCount++;
-      continue;
-    }
-    try {
-      const saved = await persistSession(s);
-      migrated.push(saved);
-    } catch {
-      /* skip — keep legacy in localStorage for manual recovery */
-    }
-  }
-  if (migrated.length + skippedCount === legacy.length) {
-    window.localStorage.setItem(MIGRATION_FLAG, String(Date.now()));
-  }
-  migrated.sort((a, b) => b.updatedAt - a.updatedAt);
-  return migrated;
+// ─── Social proof strip ────────────────────────────────────────────────────────
+
+function StatsStrip() {
+  const stats = [
+    { value: "5 min", label: "Average session" },
+    { value: "5 scores", label: "Viability dimensions" },
+    { value: "3 sources", label: "Competitor scan queries" },
+    { value: "Free", label: "To get started" },
+  ];
+
+  return (
+    <section className="border-y border-[color:var(--border)] bg-[color:var(--card)] py-8 px-6">
+      <div className="mx-auto max-w-4xl grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+        {stats.map(({ value, label }) => (
+          <div key={label}>
+            <div className="text-2xl font-bold text-[color:var(--foreground)]">
+              {value}
+            </div>
+            <div className="mt-1 text-sm text-[color:var(--muted)]">{label}</div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ─── How it works ─────────────────────────────────────────────────────────────
+
+function HowItWorks() {
+  const steps = [
+    {
+      icon: MessageSquare,
+      step: "01",
+      title: "Pitch your idea",
+      description:
+        "Drop your concept in a single sentence. The AI coach starts digging — one sharp question per turn, no fluff.",
+    },
+    {
+      icon: Globe,
+      step: "02",
+      title: "We scan the web",
+      description:
+        "While you answer, Tavily searches for real competitors, similar products, and market signals. No made-up results.",
+    },
+    {
+      icon: BarChart3,
+      step: "03",
+      title: "Get your scored report",
+      description:
+        "A full breakdown: viability scores, strengths, risks, tech stack, MVP scope, market size, and a devil's-advocate red-team pass.",
+    },
+  ];
+
+  return (
+    <section className="py-24 px-6">
+      <div className="mx-auto max-w-5xl">
+        <div className="text-center mb-14">
+          <div className="text-xs uppercase tracking-widest text-[color:var(--accent)] font-semibold mb-3">
+            How it works
+          </div>
+          <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
+            Pressure-test an idea in three steps
+          </h2>
+          <p className="mt-4 text-[color:var(--muted)] max-w-xl mx-auto">
+            No forms to fill. Just a conversation — the same questions a
+            good YC partner would ask before writing a check.
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-6">
+          {steps.map(({ icon: Icon, step, title, description }) => (
+            <div
+              key={step}
+              className="relative rounded-2xl border border-[color:var(--border)] bg-[color:var(--card)] p-6"
+            >
+              <div className="absolute top-5 right-5 text-5xl font-black text-[color:var(--border)] select-none leading-none">
+                {step}
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-[color:var(--accent)]/10 flex items-center justify-center mb-4">
+                <Icon size={20} className="text-[color:var(--accent)]" />
+              </div>
+              <h3 className="text-base font-semibold mb-2">{title}</h3>
+              <p className="text-sm text-[color:var(--muted)] leading-relaxed">
+                {description}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── Features ─────────────────────────────────────────────────────────────────
+
+function Features() {
+  const features = [
+    {
+      icon: BarChart3,
+      title: "5-dimension viability scores",
+      description:
+        "Viability, niche clarity, problem strength, differentiation, and an honest overall score — not inflated to be nice.",
+    },
+    {
+      icon: Globe,
+      title: "Real competitor research",
+      description:
+        "Three targeted search queries surface actual apps in your space. The analysis is grounded in what exists, not hallucinated.",
+    },
+    {
+      icon: TrendingUp,
+      title: "Expanded market insights",
+      description:
+        "Market size estimate, funding signals, failed-predecessor graveyard, build effort bucket, and regulatory flags — all in one pass.",
+    },
+    {
+      icon: Shield,
+      title: "Devil's advocate red-team",
+      description:
+        "A ruthless investor-persona tears apart your idea: silent killers, distribution risk, unit economics — the things founders miss.",
+    },
+    {
+      icon: Zap,
+      title: "Tech stack + MVP roadmap",
+      description:
+        "Tailored technology recommendations and a 4-6 step ordered roadmap of shippable milestones — not generic advice.",
+    },
+    {
+      icon: MessageSquare,
+      title: "Refine &amp; re-score",
+      description:
+        "Not happy with the analysis? Edit the pitch and re-run. History is saved so you can track how your idea evolves.",
+    },
+  ];
+
+  return (
+    <section className="py-24 px-6 bg-[color:var(--card)] border-y border-[color:var(--border)]">
+      <div className="mx-auto max-w-5xl">
+        <div className="text-center mb-14">
+          <div className="text-xs uppercase tracking-widest text-[color:var(--accent)] font-semibold mb-3">
+            What you get
+          </div>
+          <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
+            Everything in one report
+          </h2>
+          <p className="mt-4 text-[color:var(--muted)] max-w-xl mx-auto">
+            Most tools give you a hype check. Vibe Check gives you a reality
+            check.
+          </p>
+        </div>
+
+        <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
+          {features.map(({ icon: Icon, title, description }) => (
+            <div
+              key={title}
+              className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)] p-5 hover:border-[color:var(--accent)]/40 transition"
+            >
+              <div className="w-9 h-9 rounded-lg bg-[color:var(--accent)]/10 flex items-center justify-center mb-3">
+                <Icon size={18} className="text-[color:var(--accent)]" />
+              </div>
+              <h3
+                className="text-sm font-semibold mb-1.5"
+                dangerouslySetInnerHTML={{ __html: title }}
+              />
+              <p className="text-sm text-[color:var(--muted)] leading-relaxed">
+                {description}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── Pricing ──────────────────────────────────────────────────────────────────
+
+function Pricing() {
+  const tiers = [
+    PRICING_TIERS.free,
+    PRICING_TIERS.pro,
+    PRICING_TIERS.lifetime,
+  ] as const;
+
+  return (
+    <section className="py-24 px-6" id="pricing">
+      <div className="mx-auto max-w-5xl">
+        <div className="text-center mb-14">
+          <div className="text-xs uppercase tracking-widest text-[color:var(--accent)] font-semibold mb-3">
+            Pricing
+          </div>
+          <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
+            Pick a plan that fits the idea
+          </h2>
+          <p className="mt-4 text-[color:var(--muted)] max-w-xl mx-auto">
+            Start free. When you&apos;re burning through ideas faster than 3
+            a month, Pro unlocks unlimited checks and better reasoning.
+          </p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          {tiers.map((tier) => {
+            const highlight = tier.tier === "pro";
+            return (
+              <div
+                key={tier.tier}
+                className={`relative rounded-2xl border p-6 flex flex-col transition ${
+                  highlight
+                    ? "border-[color:var(--accent)] bg-[color:var(--card)] shadow-xl shadow-[color:var(--accent)]/10"
+                    : "border-[color:var(--border)] bg-[color:var(--card)]"
+                }`}
+              >
+                {highlight && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs px-3 py-0.5 rounded-full bg-[color:var(--accent)] text-white font-medium whitespace-nowrap">
+                    Most popular
+                  </div>
+                )}
+
+                <div className="text-xs uppercase tracking-wider text-[color:var(--muted)] font-medium">
+                  {tier.name}
+                </div>
+                <div className="mt-2 flex items-baseline gap-1">
+                  <span className="text-3xl font-bold tracking-tight">
+                    {tier.priceLabel}
+                  </span>
+                  {tier.tier === "pro" && (
+                    <span className="text-sm text-[color:var(--muted)]">
+                      /month
+                    </span>
+                  )}
+                </div>
+                <p className="mt-2 text-sm text-[color:var(--muted)]">
+                  {tier.blurb}
+                </p>
+
+                <ul className="mt-6 space-y-2.5 text-sm flex-1">
+                  {tier.features.map((f) => (
+                    <li key={f} className="flex items-start gap-2">
+                      <Check
+                        size={15}
+                        className="text-[color:var(--accent)] mt-0.5 shrink-0"
+                      />
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="mt-6">
+                  <Link
+                    href="/signin"
+                    className={`block text-center rounded-xl py-2.5 text-sm font-semibold transition ${
+                      highlight
+                        ? "bg-[color:var(--accent)] text-white hover:brightness-110 shadow-lg shadow-[color:var(--accent)]/20"
+                        : "border border-[color:var(--border)] hover:bg-[color:var(--background)]"
+                    }`}
+                  >
+                    {tier.cta}
+                  </Link>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <p className="mt-8 text-xs text-[color:var(--muted)] text-center">
+          Payments handled by Stripe. Cancel anytime from your billing
+          portal. Lifetime tier limited to the first 100 subscribers.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+// ─── FAQ ──────────────────────────────────────────────────────────────────────
+
+function FAQ() {
+  const faqs = [
+    {
+      q: "How many interview questions will I get?",
+      a: "The AI coach asks 5–7 focused questions — one per turn — then wraps up when it has enough signal. You can also skip straight to the report at any time using the &ldquo;analyze now&rdquo; shortcut.",
+    },
+    {
+      q: "Where do the competitor results come from?",
+      a: "We use Tavily&apos;s search API to run three targeted queries against live web results. No cached databases, no hallucinated company names. If nothing relevant surfaces, the report says so honestly.",
+    },
+    {
+      q: "Can I re-analyze the same idea after tweaking the pitch?",
+      a: "Yes. From the report screen, hit &ldquo;Re-score&rdquo;, edit your pitch summary, and submit. The session stays the same in your history — you&apos;ll see the updated scores immediately.",
+    },
+    {
+      q: "What is the devil&apos;s advocate pass?",
+      a: "A separate AI persona — a skeptical early-stage investor — stress-tests your idea with concrete failure modes: distribution cost, unit economics, moat erosion, cold-start problems, and more. It only tells you the bad news.",
+    },
+    {
+      q: "Is my idea data stored or used to train models?",
+      a: "Your sessions are stored in Supabase (Postgres) under your account, protected by row-level security. We don&apos;t share your data with third parties or use it to train models.",
+    },
+    {
+      q: "What models power Vibe Check?",
+      a: "Free tier uses Gemini 2.5 Flash Lite. Pro and Lifetime subscribers get Gemini 2.5 Flash — better reasoning, same speed. Competitor search is powered by the Tavily API.",
+    },
+  ];
+
+  return (
+    <section className="py-24 px-6 bg-[color:var(--card)] border-y border-[color:var(--border)]">
+      <div className="mx-auto max-w-2xl">
+        <div className="text-center mb-12">
+          <div className="text-xs uppercase tracking-widest text-[color:var(--accent)] font-semibold mb-3">
+            FAQ
+          </div>
+          <h2 className="text-3xl font-bold tracking-tight">
+            Common questions
+          </h2>
+        </div>
+
+        <div className="space-y-2">
+          {faqs.map(({ q, a }) => (
+            <details
+              key={q}
+              className="group rounded-xl border border-[color:var(--border)] bg-[color:var(--background)] overflow-hidden"
+            >
+              <summary className="flex items-center justify-between gap-4 px-5 py-4 cursor-pointer text-sm font-medium list-none select-none hover:bg-[color:var(--card)] transition">
+                <span dangerouslySetInnerHTML={{ __html: q }} />
+                <ChevronDown
+                  size={16}
+                  className="shrink-0 text-[color:var(--muted)] transition-transform group-open:rotate-180"
+                />
+              </summary>
+              <div
+                className="px-5 pb-4 text-sm text-[color:var(--muted)] leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: a }}
+              />
+            </details>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── CTA Banner ───────────────────────────────────────────────────────────────
+
+function CTABanner() {
+  return (
+    <section className="py-24 px-6 text-center">
+      <div className="mx-auto max-w-2xl">
+        <div
+          className="inline-flex w-14 h-14 rounded-2xl items-center justify-center mb-6"
+          style={{
+            background:
+              "linear-gradient(135deg, #f97316 0%, #fb923c 100%)",
+          }}
+        >
+          <Sparkles size={28} className="text-white" />
+        </div>
+        <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
+          Stop guessing. Start building the right thing.
+        </h2>
+        <p className="mt-4 text-[color:var(--muted)] text-lg max-w-lg mx-auto">
+          Three free vibe checks a month. No credit card. Cancel anytime.
+          The hardest part is having the idea — we&apos;ll handle the
+          reality check.
+        </p>
+        <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <Link
+            href="/signin"
+            className="inline-flex items-center gap-2 rounded-xl bg-[color:var(--accent)] text-white px-7 py-3.5 text-base font-semibold hover:brightness-110 transition shadow-lg shadow-[color:var(--accent)]/20"
+          >
+            Get started free
+            <ArrowRight size={18} />
+          </Link>
+          <Link
+            href="/pricing"
+            className="text-sm text-[color:var(--muted)] hover:text-[color:var(--foreground)] transition"
+          >
+            View full pricing →
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── Nav ──────────────────────────────────────────────────────────────────────
+
+function Nav() {
+  return (
+    <header className="sticky top-0 z-40 border-b border-[color:var(--border)] bg-[color:var(--background)]/80 backdrop-blur-md">
+      <div className="mx-auto max-w-6xl px-6 h-14 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-[color:var(--accent)] flex items-center justify-center">
+            <Sparkles size={15} className="text-white" />
+          </div>
+          <span className="font-semibold text-sm">Vibe Check</span>
+        </div>
+
+        <nav className="hidden sm:flex items-center gap-6 text-sm text-[color:var(--muted)]">
+          <Link href="#pricing" className="hover:text-[color:var(--foreground)] transition">
+            Pricing
+          </Link>
+          <Link href="/signin" className="hover:text-[color:var(--foreground)] transition">
+            Sign in
+          </Link>
+        </nav>
+
+        <Link
+          href="/signin"
+          className="rounded-lg bg-[color:var(--accent)] text-white px-4 py-1.5 text-sm font-medium hover:brightness-110 transition"
+        >
+          Start free
+        </Link>
+      </div>
+    </header>
+  );
+}
+
+// ─── Footer ───────────────────────────────────────────────────────────────────
+
+function Footer() {
+  return (
+    <footer className="border-t border-[color:var(--border)] py-8 px-6">
+      <div className="mx-auto max-w-5xl flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-[color:var(--muted)]">
+        <div className="flex items-center gap-2">
+          <div className="w-5 h-5 rounded-md bg-[color:var(--accent)] flex items-center justify-center">
+            <Sparkles size={11} className="text-white" />
+          </div>
+          <span>Vibe Check</span>
+          <span className="text-[color:var(--border)]">·</span>
+          <span>Powered by Gemini &amp; Tavily</span>
+        </div>
+        <div className="flex items-center gap-5">
+          <Link href="/pricing" className="hover:text-[color:var(--foreground)] transition">
+            Pricing
+          </Link>
+          <Link href="/signin" className="hover:text-[color:var(--foreground)] transition">
+            Sign in
+          </Link>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default function LandingPage() {
+  return (
+    <>
+      <Nav />
+      <main>
+        <Hero />
+        <StatsStrip />
+        <HowItWorks />
+        <Features />
+        <Pricing />
+        <FAQ />
+        <CTABanner />
+      </main>
+      <Footer />
+    </>
+  );
 }
