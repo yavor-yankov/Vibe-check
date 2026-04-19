@@ -4,7 +4,12 @@ import { ANALYSIS_SYSTEM_PROMPT } from "@/lib/prompts";
 import { consumeUsage, refundUsage } from "@/lib/billing/usage";
 import { AnalyzeBodySchema, parseBody } from "@/lib/validation";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/rate-limit";
+import { fireWebhook } from "@/lib/webhooks";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { logger } from "@/lib/logger";
 import type { AnalysisReport, ExpandedInsights } from "@/lib/types";
+
+const log = logger.child({ route: "/api/analyze" });
 
 export const runtime = "nodejs";
 
@@ -238,6 +243,32 @@ export async function POST(request: NextRequest) {
       ...parsed,
       insights: sanitizeInsights(parsed.insights),
     };
+
+    // Fire webhook — non-blocking, best-effort. We look up the saved URL
+    // from the user's profile after the analysis is done so we never delay
+    // the response while fetching settings upfront.
+    void (async () => {
+      try {
+        const supabase = await createSupabaseServerClient();
+        const { data } = await supabase
+          .from("users")
+          .select("webhook_url")
+          .eq("id", plan.userId)
+          .maybeSingle();
+        const webhookUrl = data?.webhook_url;
+        if (webhookUrl) {
+          await fireWebhook(webhookUrl, {
+            event: "vibe_check.completed",
+            timestamp: new Date().toISOString(),
+            ideaSummary,
+            report,
+          });
+        }
+      } catch (err) {
+        log.warn({ err, userId: plan.userId }, "Webhook lookup/dispatch failed");
+      }
+    })();
+
     return Response.json({ report });
   } catch (err) {
     // Analysis failed after we already charged the user — roll the slot

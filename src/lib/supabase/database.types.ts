@@ -36,6 +36,7 @@ export interface Database {
           current_period_end: string | null;
           usage_month: string | null;
           usage_count: number;
+          webhook_url: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -50,6 +51,7 @@ export interface Database {
           current_period_end?: string | null;
           usage_month?: string | null;
           usage_count?: number;
+          webhook_url?: string | null;
         };
         Update: {
           email?: string;
@@ -61,6 +63,7 @@ export interface Database {
           current_period_end?: string | null;
           usage_month?: string | null;
           usage_count?: number;
+          webhook_url?: string | null;
         };
         Relationships: EmptyRelationships;
       };
