@@ -259,6 +259,39 @@ export default function Home() {
       }
       // final persist
       persist(working);
+
+      // Auto-generate a meaningful session title after the FIRST assistant
+      // reply. At this point sessionWithUser.messages has exactly 1 entry
+      // (the user's seed idea). Fire-and-forget — a failed title call must
+      // never break the interview flow.
+      if (sessionWithUser.messages.length === 1) {
+        const seed = sessionWithUser.messages[0]?.content ?? "";
+        void (async () => {
+          try {
+            const res = await fetch("/api/title", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ seed }),
+            });
+            if (res.ok) {
+              const { title } = (await res.json()) as { title?: string | null };
+              if (title) {
+                const titled: Session = { ...working, title };
+                // Only apply if the user is still on this session.
+                setCurrent((prev) =>
+                  prev?.id === titled.id ? titled : prev
+                );
+                setSessions((prev) =>
+                  prev.map((s) => (s.id === titled.id ? titled : s))
+                );
+                persist(titled);
+              }
+            }
+          } catch {
+            // Non-fatal — sidebar label stays as seed truncation.
+          }
+        })();
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       setError(msg);
