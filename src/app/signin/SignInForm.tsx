@@ -4,6 +4,7 @@ import { Sparkles } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { appOrigin } from "@/lib/supabase/env";
 
 type Status =
   | { kind: "idle" }
@@ -13,7 +14,13 @@ type Status =
 
 export default function SignInForm() {
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/";
+  // Accept only same-origin relative paths; default to /dashboard so
+  // unauthenticated deep-links fall through cleanly after sign-in.
+  const rawNext = searchParams.get("next") ?? "/dashboard";
+  const next =
+    rawNext.startsWith("/") && !rawNext.startsWith("//")
+      ? rawNext
+      : "/dashboard";
   // Surface errors the callback route bounces back with (`?error=...`)
   // so OAuth / code-exchange failures aren't silently swallowed.
   const callbackError = searchParams.get("error");
@@ -25,12 +32,14 @@ export default function SignInForm() {
   );
   const [googleLoading, setGoogleLoading] = useState(false);
 
-  const callbackUrl = (extra: string) =>
-    typeof window !== "undefined"
-      ? `${window.location.origin}/auth/callback?next=${encodeURIComponent(
-          extra
-        )}`
-      : "";
+  // Build the Supabase emailRedirectTo / OAuth redirectTo URL.
+  // Uses NEXT_PUBLIC_APP_URL when set so magic links always land on the
+  // correct deployment — critical when multiple Supabase projects exist in
+  // the browser (they can fall back to the wrong project's Site URL otherwise).
+  const callbackUrl = (extra: string) => {
+    const origin = appOrigin();
+    return origin ? `${origin}/auth/callback?next=${encodeURIComponent(extra)}` : "";
+  };
 
   const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault();

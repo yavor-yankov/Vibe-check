@@ -14,3 +14,25 @@ export function requirePublicEnv(): { url: string; anonKey: string } {
   }
   return { url, anonKey };
 }
+
+/**
+ * Returns the canonical app origin used for Supabase auth redirect URLs.
+ *
+ * Prefer the explicit `NEXT_PUBLIC_APP_URL` env var so magic links always
+ * land on the correct deployment — especially important when multiple
+ * Supabase projects exist in the browser, which can cause Supabase to fall
+ * back to the wrong project's Site URL.
+ *
+ * Falls back to `window.location.origin` on the client (dev convenience)
+ * and to an empty string on the server (caller must be client-side).
+ */
+export function appOrigin(): string {
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    // Strip trailing slash so callers can always do `appOrigin() + "/path"`.
+    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
+  }
+  if (typeof window !== "undefined") {
+    return window.location.origin;
+  }
+  return "";
+}

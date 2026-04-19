@@ -32,6 +32,23 @@ See [`.env.example`](./.env.example) for the full list.
 
 The schema creates `users`, `sessions`, `messages`, `competitors`, `reports`, and `red_team_reports` with RLS enabled — a user can only see their own rows.
 
+### Auth — Allowed Redirect URLs (important if you have multiple Supabase projects)
+
+If magic links redirect to the wrong app after clicking, it means Supabase is falling back to its default Site URL for a different project. Fix it in two steps:
+
+1. **Set `NEXT_PUBLIC_APP_URL`** in `.env.local` (and in your Vercel/hosting env vars):
+   ```
+   NEXT_PUBLIC_APP_URL=https://your-app.vercel.app   # or http://localhost:3000 for dev
+   ```
+
+2. **Add the redirect URL to Supabase**: open *Authentication → URL Configuration* in your Supabase project dashboard and add this to the **Allowed Redirect URLs** list:
+   ```
+   https://your-app.vercel.app/auth/callback
+   ```
+   For local dev also add `http://localhost:3000/auth/callback`.
+
+Without step 2, Supabase will ignore the `emailRedirectTo` parameter and fall back to the project's Site URL.
+
 ## Stack
 
 Next.js 16 · React 19 · TypeScript · Tailwind 4 · Zod · Supabase (Postgres + Auth) · Google Gemini · Tavily.
