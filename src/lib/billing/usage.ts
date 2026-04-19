@@ -10,7 +10,10 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { currentUsageMonth, getTier, PRICING_TIERS } from "./plan";
+import { logger } from "@/lib/logger";
 import type { SubscriptionTier } from "@/lib/supabase/database.types";
+
+const log = logger.child({ module: "billing/usage" });
 
 export interface PlanSnapshot {
   userId: string;
@@ -157,6 +160,6 @@ export async function refundUsage(
       p_month: month,
     });
   } catch (err) {
-    console.error("refundUsage failed", err);
+    log.error({ err, userId, month }, "refundUsage failed");
   }
 }
