@@ -48,12 +48,40 @@ export default function SignInForm() {
       return;
     }
     setStatus({ kind: "sending" });
+
+    // Try our branded email endpoint first (uses Resend + custom HTML).
+    // Falls back to native Supabase OTP when RESEND_API_KEY isn't configured
+    // (endpoint returns 501 with { fallback: true }).
+    try {
+      const res = await fetch("/api/auth/magic-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), next }),
+      });
+
+      if (res.ok) {
+        setStatus({ kind: "sent" });
+        return;
+      }
+
+      const body = (await res.json()) as { fallback?: boolean; error?: string };
+      // 501 = Resend not configured — fall through to native OTP below.
+      if (!body.fallback) {
+        setStatus({
+          kind: "error",
+          message: body.error ?? "Failed to send sign-in email.",
+        });
+        return;
+      }
+    } catch {
+      // Network error talking to our own API — fall through to native OTP.
+    }
+
+    // Native Supabase OTP fallback (plain email, always works).
     const supabase = createSupabaseBrowserClient();
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      options: {
-        emailRedirectTo: callbackUrl(next),
-      },
+      options: { emailRedirectTo: callbackUrl(next) },
     });
     if (error) {
       setStatus({ kind: "error", message: error.message });
