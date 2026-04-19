@@ -24,9 +24,12 @@ export const MessagesSchema = z
 
 /** Single competitor row — mirrors the Competitor type. */
 export const CompetitorSchema = z.object({
-  title: z.string().max(300),
+  title: z.string().max(300).transform((v) => v.slice(0, 300)),
   url: z.string().url().max(2_000),
-  snippet: z.string().max(2_000),
+  // Tavily can return very long snippets. Truncate silently rather than
+  // rejecting the whole request — the Gemini prompt only uses the first
+  // ~400 chars anyway.
+  snippet: z.string().transform((v) => v.slice(0, 2_000)),
 });
 
 /** Idea summary (used across /api/chat, /api/analyze, /api/search, /api/redteam). */

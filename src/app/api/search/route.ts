@@ -72,9 +72,11 @@ async function tavilySearch(
   }
   const data = (await res.json()) as TavilyResponse;
   return (data.results ?? []).map((r) => ({
-    title: r.title,
+    title: (r.title ?? "").slice(0, 300),
     url: r.url,
-    snippet: r.content,
+    // Tavily `content` can be several KB — cap it to 2 000 chars so it
+    // passes the CompetitorSchema and doesn't bloat the Gemini prompt.
+    snippet: (r.content ?? "").slice(0, 2_000),
   }));
 }
 
@@ -92,17 +94,17 @@ async function duckduckgoSearch(query: string): Promise<Competitor[]> {
   const results: Competitor[] = [];
   if (data.AbstractURL && data.AbstractText) {
     results.push({
-      title: data.Heading ?? data.AbstractURL,
+      title: (data.Heading ?? data.AbstractURL).slice(0, 300),
       url: data.AbstractURL,
-      snippet: data.AbstractText,
+      snippet: data.AbstractText.slice(0, 2_000),
     });
   }
   for (const t of data.RelatedTopics ?? []) {
     if (t.FirstURL && t.Text) {
       results.push({
-        title: t.Text.split(" - ")[0]?.slice(0, 80) ?? t.FirstURL,
+        title: (t.Text.split(" - ")[0]?.slice(0, 80) ?? t.FirstURL),
         url: t.FirstURL,
-        snippet: t.Text,
+        snippet: t.Text.slice(0, 2_000),
       });
     }
     if (results.length >= 5) break;
