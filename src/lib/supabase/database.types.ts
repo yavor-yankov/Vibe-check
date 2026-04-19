@@ -252,6 +252,35 @@ export interface Database {
         };
         Returns: number;
       };
+      upsert_session_full: {
+        Args: {
+          p_session_id: string;
+          p_user_id: string;
+          p_title: string;
+          p_stage: string;
+          p_idea_summary: string | null;
+          p_report_generation: number;
+          p_messages: unknown;        // jsonb array
+          p_competitors: unknown;     // jsonb array
+          p_report: unknown | null;   // jsonb object or null
+          p_red_team: unknown | null; // jsonb object or null
+        };
+        Returns: {
+          session: {
+            id: string;
+            title: string;
+            stage: string;
+            idea_summary: string | null;
+            report_generation: number;
+            created_at: string;
+            updated_at: string;
+            messages: unknown[];
+            competitors: unknown[];
+            reports: unknown[];
+            red_team_reports: unknown[];
+          };
+        };
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

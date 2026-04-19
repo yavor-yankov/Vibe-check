@@ -219,15 +219,83 @@ export async function clearRedTeamReport(
  * Used by `POST /api/sessions` so the client can keep its existing
  * "persist the whole session object on every change" flow.
  *
- * Preserves the caller-supplied `id`, `createdAt`. RLS ensures the caller can
- * only touch rows that belong to `userId`.
+ * Optimized path: calls the `upsert_session_full` PL/pgSQL RPC which
+ * completes all writes and the final re-read in **one round trip and one
+ * implicit transaction** (down from 6+ serial queries).
+ *
+ * Falls back to the legacy serial path when the RPC is unavailable (e.g. a
+ * local dev environment that hasn't yet run migration 0005).
+ *
+ * Preserves the caller-supplied `id`, `createdAt`. The RPC enforces
+ * ownership — attempting to overwrite another user's session raises a
+ * Postgres 42501 (insufficient_privilege) error.
  */
 export async function upsertSessionFull(
   supabase: DB,
   userId: string,
   session: Session
 ): Promise<Session> {
-  // 1. Upsert the session row.
+  // ── RPC path ─────────────────────────────────────────────────────────────
+  const reportPayload = session.report
+    ? {
+        verdict: session.report.verdict,
+        verdict_label: session.report.verdictLabel,
+        summary: session.report.summary,
+        scores: session.report.scores,
+        strengths: session.report.strengths,
+        risks: session.report.risks,
+        unique_angles: session.report.uniqueAngles,
+        tech_stack: session.report.techStack,
+        roadmap: session.report.roadmap,
+        mvp_scope: session.report.mvpScope,
+        insights: session.report.insights ?? null,
+      }
+    : null;
+
+  const redTeamPayload = session.redTeamReport
+    ? {
+        verdict: session.redTeamReport.verdict,
+        reasons: session.redTeamReport.reasons,
+        silent_killers: session.redTeamReport.silentKillers,
+        report_generation: session.reportGeneration ?? 0,
+      }
+    : null;
+
+  const { data: rpcData, error: rpcErr } = await supabase.rpc(
+    "upsert_session_full",
+    {
+      p_session_id: session.id,
+      p_user_id: userId,
+      p_title: session.title,
+      p_stage: session.stage,
+      p_idea_summary: session.ideaSummary ?? null,
+      p_report_generation: session.reportGeneration ?? 0,
+      p_messages: session.messages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        created_at: new Date(m.createdAt).toISOString(),
+      })),
+      p_competitors: session.competitors,
+      p_report: reportPayload,
+      p_red_team: redTeamPayload,
+    }
+  );
+
+  // If the RPC succeeded, map the returned JSONB back to a Session.
+  if (!rpcErr && rpcData) {
+    const s = (rpcData as { session: SessionWithChildren }).session;
+    return rowToSession(s);
+  }
+
+  // RPC unavailable (function not yet deployed) — fall back silently.
+  // Any other error (ownership violation, constraint failure) is re-thrown.
+  const isUndefined =
+    rpcErr?.code === "42883" || // undefined_function
+    rpcErr?.code === "PGRST202"; // PostgREST "Could not find function"
+  if (!isUndefined) throw rpcErr;
+
+  // ── Legacy serial fallback ───────────────────────────────────────────────
   const { error: upsertErr } = await supabase.from("sessions").upsert(
     {
       id: session.id,
@@ -241,8 +309,6 @@ export async function upsertSessionFull(
   );
   if (upsertErr) throw upsertErr;
 
-  // 2. Replace messages. Delete first so we don't accumulate rows across
-  //    refine passes / edits.
   const delMsg = await supabase
     .from("messages")
     .delete()
@@ -261,10 +327,8 @@ export async function upsertSessionFull(
     if (error) throw error;
   }
 
-  // 3. Replace competitors.
   await replaceCompetitors(supabase, session.id, session.competitors);
 
-  // 4. Report — upsert if present, delete if cleared.
   if (session.report) {
     await saveReport(supabase, session.id, session.report);
   } else {
@@ -275,7 +339,6 @@ export async function upsertSessionFull(
     if (error) throw error;
   }
 
-  // 5. Red-team report — upsert if present, delete if cleared.
   if (session.redTeamReport) {
     await saveRedTeamReport(
       supabase,
