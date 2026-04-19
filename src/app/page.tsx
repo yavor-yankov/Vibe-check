@@ -271,12 +271,17 @@ export default function Home() {
     revertIdeaSummary?: string
   ) => {
     const ideaSummary = scanning.ideaSummary ?? "";
+    // 90-second hard cap on the whole scan (search + analyze). If either
+    // fetch hangs the user would otherwise see the spinner forever.
+    const abort = new AbortController();
+    const timeout = setTimeout(() => abort.abort(), 90_000);
     try {
       // 1. search competitors
       const searchRes = await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ideaSummary }),
+        signal: abort.signal,
       });
       const searchData = (await searchRes.json()) as {
         competitors?: Session["competitors"];
@@ -296,6 +301,7 @@ export default function Home() {
           ideaSummary,
           competitors,
         }),
+        signal: abort.signal,
       });
       const analyzeData = (await analyzeRes.json()) as {
         report?: AnalysisReport;
@@ -305,6 +311,7 @@ export default function Home() {
         throw new Error(analyzeData.error || "Analysis failed");
       }
 
+      clearTimeout(timeout);
       const done: Session = {
         ...scanning,
         stage: "report",
@@ -316,7 +323,13 @@ export default function Home() {
       };
       persist(done);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Unknown error";
+      clearTimeout(timeout);
+      const isAbort = err instanceof DOMException && err.name === "AbortError";
+      const msg = isAbort
+        ? "Analysis timed out (90 s). Please try again."
+        : err instanceof Error
+          ? err.message
+          : "Unknown error";
       setError(msg);
       // revert so the user can retry from a sensible stage. If caller
       // supplied an original ideaSummary (refine path), restore it so the
@@ -450,7 +463,18 @@ export default function Home() {
         )}
 
         {current.stage === "scanning" && (
-          <ScanningStage ideaSummary={current.ideaSummary ?? ""} />
+          <ScanningStage
+            ideaSummary={current.ideaSummary ?? ""}
+            error={error}
+            onRetry={
+              error
+                ? () => {
+                    setError(null);
+                    runAnalysis(current.ideaSummary ?? "");
+                  }
+                : undefined
+            }
+          />
         )}
 
         {current.stage === "report" && current.report && (
