@@ -34,6 +34,9 @@ export default function Home() {
   const [isHydrated, setIsHydrated] = useState(false);
   // Mobile sidebar drawer state
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  // Incrementing this counter signals UsageBadge to re-fetch the quota
+  // after each vibe check is consumed.
+  const [usageRefreshSignal, setUsageRefreshSignal] = useState(0);
 
   // Keep a ref to the latest active session so async callbacks don't
   // act on stale closures (e.g. runRedTeam finishing after the user
@@ -357,6 +360,8 @@ export default function Home() {
         reportGeneration: (scanning.reportGeneration ?? 0) + 1,
       };
       persist(done);
+      // Notify the sidebar UsageBadge that a quota slot was consumed.
+      setUsageRefreshSignal((n) => n + 1);
     } catch (err) {
       clearTimeout(timeout);
       const isAbort = err instanceof DOMException && err.name === "AbortError";
@@ -479,6 +484,7 @@ export default function Home() {
         isOpen={isSidebarOpen}
         onOpen={() => setIsSidebarOpen(true)}
         onClose={() => setIsSidebarOpen(false)}
+        usageRefreshSignal={usageRefreshSignal}
       />
       {/* On mobile, add top padding to clear the fixed hamburger button */}
       <main className="flex-1 min-w-0 md:pt-0 pt-14">
