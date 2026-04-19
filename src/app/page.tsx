@@ -32,6 +32,8 @@ export default function Home() {
   const [isRedTeamLoading, setIsRedTeamLoading] = useState(false);
   const [redTeamError, setRedTeamError] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
+  // Mobile sidebar drawer state
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Keep a ref to the latest active session so async callbacks don't
   // act on stale closures (e.g. runRedTeam finishing after the user
@@ -428,8 +430,12 @@ export default function Home() {
         onNew={handleNew}
         onSelect={handleSelect}
         onDelete={handleDelete}
+        isOpen={isSidebarOpen}
+        onOpen={() => setIsSidebarOpen(true)}
+        onClose={() => setIsSidebarOpen(false)}
       />
-      <main className="flex-1 min-w-0">
+      {/* On mobile, add top padding to clear the fixed hamburger button */}
+      <main className="flex-1 min-w-0 md:pt-0 pt-14">
         {error && (
           <div className="px-6 pt-4">
             <div className="max-w-3xl mx-auto rounded-lg border border-[color:var(--bad)]/30 bg-[color:var(--bad)]/5 px-4 py-3 text-sm text-[color:var(--bad)]">
