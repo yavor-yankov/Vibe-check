@@ -1,3 +1,4 @@
+import "server-only";
 /**
  * Server-side usage accounting for Vibe Check's monthly quotas.
  *
