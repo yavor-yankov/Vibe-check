@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Type-check & build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        # Placeholder env vars so Next.js doesn't throw on missing config
+        # during the build step. Real secrets live in Vercel and are never
+        # needed at build time.
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+          SUPABASE_SERVICE_ROLE_KEY: placeholder
+          GEMINI_API_KEY: placeholder
+          TAVILY_API_KEY: placeholder
+          STRIPE_SECRET_KEY: sk_test_placeholder
+          STRIPE_WEBHOOK_SECRET: whsec_placeholder
+          STRIPE_PRICE_PRO: price_placeholder
+          STRIPE_PRICE_LIFETIME: price_placeholder
+          NEXT_PUBLIC_APP_URL: https://placeholder.example.com
+        run: pnpm build
+
+      - name: Lint
+        run: pnpm lint || true   # advisory only until lint rules are stabilised
