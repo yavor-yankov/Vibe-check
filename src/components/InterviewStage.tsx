@@ -1,7 +1,7 @@
 "use client";
 
-import { Send, Sparkles, User, Wand2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ChevronDown, Send, Sparkles, User, Wand2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "@/lib/types";
 
 interface InterviewStageProps {
@@ -14,13 +14,15 @@ interface InterviewStageProps {
 // Minimum user turns before the "analyze now" escape hatch is offered.
 const ESCAPE_HATCH_MIN_TURNS = 2;
 
+// How far from the bottom (px) before we consider the user "scrolled up".
+const SCROLL_THRESHOLD = 80;
+
 function syntheticSummaryFromMessages(messages: ChatMessage[]): string {
   const userTurns = messages
     .filter((m) => m.role === "user")
     .map((m) => m.content.trim())
     .filter(Boolean);
   if (userTurns.length === 0) return "";
-  // Keep first turn (usually the seed idea) + later turns concatenated, capped.
   return userTurns.join(" · ").slice(0, 800);
 }
 
@@ -31,21 +33,11 @@ function makeId() {
 }
 
 export function buildUserMessage(content: string): ChatMessage {
-  return {
-    id: makeId(),
-    role: "user",
-    content,
-    createdAt: Date.now(),
-  };
+  return { id: makeId(), role: "user", content, createdAt: Date.now() };
 }
 
 export function buildAssistantMessage(content: string): ChatMessage {
-  return {
-    id: makeId(),
-    role: "assistant",
-    content,
-    createdAt: Date.now(),
-  };
+  return { id: makeId(), role: "assistant", content, createdAt: Date.now() };
 }
 
 function extractReady(content: string): string | null {
@@ -60,14 +52,62 @@ export default function InterviewStage({
   isStreaming,
 }: InterviewStageProps) {
   const [draft, setDraft] = useState("");
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // True when we should auto-scroll (user is at/near the bottom)
+  const atBottomRef = useRef(true);
+  const prevMessageCountRef = useRef(messages.length);
 
+  /** Returns true when the scroll container is within SCROLL_THRESHOLD of the bottom. */
+  const isAtBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight <= SCROLL_THRESHOLD;
+  }, []);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+    setShowScrollBtn(false);
+    setUnreadCount(0);
+    atBottomRef.current = true;
+  }, []);
+
+  // Auto-scroll when new messages arrive — but only if already at the bottom.
   useEffect(() => {
-    scrollRef.current?.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: "smooth",
-    });
-  }, [messages]);
+    const newCount = messages.length;
+    const prevCount = prevMessageCountRef.current;
+    prevMessageCountRef.current = newCount;
+
+    if (newCount <= prevCount) return; // not a new message
+
+    if (atBottomRef.current) {
+      scrollToBottom("smooth");
+    } else {
+      // User has scrolled up — show badge but don't force-scroll.
+      setUnreadCount((n) => n + (newCount - prevCount));
+      setShowScrollBtn(true);
+    }
+  }, [messages, scrollToBottom]);
+
+  // Initial scroll on mount (no animation).
+  useEffect(() => {
+    scrollToBottom("instant");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function handleScroll() {
+    const atBottom = isAtBottom();
+    atBottomRef.current = atBottom;
+    if (atBottom) {
+      setShowScrollBtn(false);
+      setUnreadCount(0);
+    } else {
+      setShowScrollBtn(true);
+    }
+  }
 
   const last = messages[messages.length - 1];
   const readySummary =
@@ -81,10 +121,15 @@ export default function InterviewStage({
     if (!t || isStreaming) return;
     onSend(t);
     setDraft("");
+    // Optimistically snap to bottom when the user sends a message.
+    setTimeout(() => scrollToBottom("smooth"), 50);
   }
 
   return (
-    <div className="flex flex-col h-screen">
+    // Use h-full so this fills its parent container rather than forcing 100vh.
+    // The dashboard page root already sets the viewport height.
+    <div className="flex flex-col h-full">
+      {/* ── Step header ── */}
       <div className="shrink-0 border-b border-[color:var(--border)] bg-[color:var(--card)] px-6 py-3">
         <div className="max-w-3xl mx-auto">
           <div className="text-xs text-[color:var(--accent)] font-medium">
@@ -96,22 +141,51 @@ export default function InterviewStage({
         </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
-        <div className="max-w-3xl mx-auto space-y-6">
-          {messages.map((m) => (
-            <Message key={m.id} message={m} />
-          ))}
-          {isStreaming && last?.role === "user" && <TypingBubble />}
+      {/* ── Scrollable message list ── */}
+      {/* Relative wrapper so the scroll-to-bottom button can be positioned
+          inside the message area, above the composer. */}
+      <div className="flex-1 min-h-0 relative">
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          className="h-full overflow-y-auto px-6 py-6"
+        >
+          <div className="max-w-3xl mx-auto space-y-6 pb-4">
+            {messages.map((m) => (
+              <Message key={m.id} message={m} />
+            ))}
+            {isStreaming && last?.role === "user" && <TypingBubble />}
+          </div>
         </div>
+
+        {/* ── Scroll-to-bottom button ── */}
+        {showScrollBtn && (
+          <div className="print:hidden absolute bottom-3 left-1/2 -translate-x-1/2 z-10">
+            <button
+              type="button"
+              onClick={() => scrollToBottom("smooth")}
+              aria-label="Scroll to latest message"
+              className="flex items-center gap-1.5 rounded-full bg-[color:var(--card)] border border-[color:var(--border)] shadow-lg px-3 py-1.5 text-xs font-medium text-[color:var(--foreground)] hover:bg-[color:var(--background)] transition"
+            >
+              <ChevronDown size={13} />
+              {unreadCount > 0 ? (
+                <span className="bg-[color:var(--accent)] text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">
+                  {unreadCount}
+                </span>
+              ) : (
+                "Latest"
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
+      {/* ── Composer / ready banner ── */}
       {readySummary ? (
         <div className="shrink-0 border-t border-[color:var(--border)] bg-[color:var(--accent)]/5 px-6 py-4">
           <div className="max-w-3xl mx-auto flex items-center gap-4">
             <div className="flex-1">
-              <div className="text-sm font-medium">
-                Got it — ready to analyze.
-              </div>
+              <div className="text-sm font-medium">Got it — ready to analyze.</div>
               <div className="text-xs text-[color:var(--muted)]">
                 I&apos;ll search the web for similar apps, then score your idea.
               </div>
