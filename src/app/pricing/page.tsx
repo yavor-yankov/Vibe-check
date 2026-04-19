@@ -1,8 +1,20 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, Check } from "lucide-react";
 import { PRICING_TIERS } from "@/lib/billing/plan";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import PricingCheckoutButton from "./PricingCheckoutButton";
+
+export const metadata: Metadata = {
+  title: "Pricing",
+  description:
+    "Start free with 5 vibe checks per month. Upgrade to Pro for unlimited checks, priority AI, and advanced competitor analysis.",
+  openGraph: {
+    title: "Vibe Check Pricing — Free & Pro Plans",
+    description:
+      "Start free with 5 vibe checks per month. Upgrade to Pro for unlimited checks, priority AI, and advanced competitor analysis.",
+  },
+};
 
 export const dynamic = "force-dynamic";
 
