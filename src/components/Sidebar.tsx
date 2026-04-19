@@ -17,6 +17,11 @@ interface SidebarProps {
   onClose?: () => void;
   /** Mobile only — called when the hamburger button is clicked. */
   onOpen?: () => void;
+  /**
+   * Increment to trigger a UsageBadge re-fetch (e.g. after a vibe check
+   * is consumed so the quota display stays accurate).
+   */
+  usageRefreshSignal?: number;
 }
 
 function relative(ts: number): string {
@@ -39,6 +44,7 @@ export default function Sidebar({
   isOpen = false,
   onClose,
   onOpen,
+  usageRefreshSignal,
 }: SidebarProps) {
   const handleSelect = (id: string) => {
     onSelect(id);
@@ -160,7 +166,10 @@ export default function Sidebar({
           )}
         </div>
 
-        <UsageBadge className="p-3 border-t border-[color:var(--border)]" />
+        <UsageBadge
+          className="p-3 border-t border-[color:var(--border)]"
+          refreshSignal={usageRefreshSignal}
+        />
         <UserBadge className="p-3 border-t border-[color:var(--border)]" />
 
         <div className="px-4 py-3 border-t border-[color:var(--border)] text-[11px] text-[color:var(--muted)] leading-tight">
