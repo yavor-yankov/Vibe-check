@@ -1,29 +1,122 @@
 "use client";
 
 import { Sparkles } from "lucide-react";
-import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 type Status =
   | { kind: "idle" }
   | { kind: "sending" }
   | { kind: "sent" }
+  | { kind: "completing" }
   | { kind: "error"; message: string };
 
+// Accept only same-origin relative paths; mirrors the server-side check
+// in /auth/callback so `next=https://evil.com` can't phish an open redirect.
+function safeNext(raw: string | null): string {
+  if (!raw) return "/";
+  if (!raw.startsWith("/") || raw.startsWith("//")) return "/";
+  return raw;
+}
+
+type HashResult =
+  | { kind: "none" }
+  | { kind: "error"; message: string }
+  | { kind: "tokens"; accessToken: string; refreshToken: string };
+
+// Supabase's implicit-flow magic links redirect to /signin with the tokens
+// in the URL fragment (#access_token=…&refresh_token=…) instead of the
+// ?code=… query /auth/callback handles. Browsers don't forward fragments
+// to the server so we parse + strip them on the client. Runs lazily (on
+// first render) so the strip happens before paint and tokens never sit
+// in the visible URL bar.
+function consumeAuthHash(): HashResult {
+  if (typeof window === "undefined") return { kind: "none" };
+  const hash = window.location.hash;
+  if (!hash || hash.length < 2) return { kind: "none" };
+  const params = new URLSearchParams(hash.slice(1));
+  const errorDescription =
+    params.get("error_description") ?? params.get("error");
+  const accessToken = params.get("access_token");
+  const refreshToken = params.get("refresh_token");
+  if (!errorDescription && (!accessToken || !refreshToken)) {
+    return { kind: "none" };
+  }
+  // Strip tokens from the URL immediately so they can't leak via referer
+  // headers, browser history, or a stray copy-paste. Preserve the search
+  // string so a page refresh doesn't lose `?next=…` (used for the
+  // post-signin redirect target).
+  window.history.replaceState(
+    null,
+    "",
+    window.location.pathname + window.location.search
+  );
+  if (errorDescription) {
+    return { kind: "error", message: errorDescription };
+  }
+  return {
+    kind: "tokens",
+    accessToken: accessToken!,
+    refreshToken: refreshToken!,
+  };
+}
+
 export default function SignInForm() {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/";
+  const next = safeNext(searchParams.get("next"));
   // Surface errors the callback route bounces back with (`?error=...`)
   // so OAuth / code-exchange failures aren't silently swallowed.
   const callbackError = searchParams.get("error");
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<Status>(
-    callbackError
+  const [hashResult] = useState<HashResult>(consumeAuthHash);
+  const [status, setStatus] = useState<Status>(() => {
+    if (hashResult.kind === "tokens") return { kind: "completing" };
+    if (hashResult.kind === "error") {
+      return { kind: "error", message: hashResult.message };
+    }
+    return callbackError
       ? { kind: "error", message: callbackError }
-      : { kind: "idle" }
-  );
+      : { kind: "idle" };
+  });
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  useEffect(() => {
+    if (hashResult.kind !== "tokens") return;
+    let cancelled = false;
+    const supabase = createSupabaseBrowserClient();
+    supabase.auth
+      .setSession({
+        access_token: hashResult.accessToken,
+        refresh_token: hashResult.refreshToken,
+      })
+      .then(({ error }) => {
+        if (cancelled) return;
+        if (error) {
+          setStatus({ kind: "error", message: error.message });
+          return;
+        }
+        router.replace(next);
+        router.refresh();
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const message =
+          err instanceof Error ? err.message : "Failed to complete sign-in.";
+        setStatus({ kind: "error", message });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hashResult, next, router]);
+
+  // While we're finishing the magic-link token exchange, block the other
+  // sign-in buttons. Navigating away (e.g. clicking Google) would unmount
+  // this component and abort the in-flight `setSession` — and since the
+  // tokens have already been stripped from the URL, they'd be lost with
+  // no way to recover without requesting a new link.
+  const completing = status.kind === "completing";
 
   const callbackUrl = (extra: string) =>
     typeof window !== "undefined"
@@ -89,7 +182,7 @@ export default function SignInForm() {
       <button
         type="button"
         onClick={handleGoogle}
-        disabled={googleLoading || status.kind === "sending"}
+        disabled={googleLoading || status.kind === "sending" || completing}
         className="w-full flex items-center justify-center gap-3 rounded-lg border border-[color:var(--border)] bg-[color:var(--background)] py-2.5 px-4 text-sm font-medium hover:bg-[color:var(--card)] transition disabled:opacity-60 disabled:cursor-not-allowed mb-4"
       >
         <GoogleIcon />
@@ -102,7 +195,14 @@ export default function SignInForm() {
         <div className="flex-1 h-px bg-[color:var(--border)]" />
       </div>
 
-      {status.kind === "sent" ? (
+      {status.kind === "completing" ? (
+        <div className="rounded-lg border border-[color:var(--border)] bg-[color:var(--background)] p-4 text-sm">
+          <div className="font-medium mb-1">Signing you in…</div>
+          <div className="text-[color:var(--muted)]">
+            Completing your magic-link session.
+          </div>
+        </div>
+      ) : status.kind === "sent" ? (
         <div className="rounded-lg border border-[color:var(--border)] bg-[color:var(--background)] p-4 text-sm">
           <div className="font-medium mb-1">Check your inbox</div>
           <div className="text-[color:var(--muted)]">
