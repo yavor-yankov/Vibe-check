@@ -6,13 +6,10 @@ import {
   readCachedSearch,
   writeCachedSearch,
 } from "@/lib/billing/tavily-cache";
+import { SearchBodySchema, parseBody } from "@/lib/validation";
 import type { Competitor } from "@/lib/types";
 
 export const runtime = "nodejs";
-
-interface SearchRequestBody {
-  ideaSummary: string;
-}
 
 interface TavilyResult {
   title: string;
@@ -110,19 +107,16 @@ async function duckduckgoSearch(query: string): Promise<Competitor[]> {
 }
 
 export async function POST(request: NextRequest) {
-  let body: SearchRequestBody;
+  let raw: unknown;
   try {
-    body = (await request.json()) as SearchRequestBody;
+    raw = await request.json();
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const { ideaSummary } = body;
-  if (!ideaSummary || typeof ideaSummary !== "string") {
-    return Response.json(
-      { error: "ideaSummary is required" },
-      { status: 400 }
-    );
-  }
+
+  const parsed = parseBody(SearchBodySchema, raw);
+  if (!parsed.ok) return parsed.response;
+  const { ideaSummary } = parsed.data;
 
   const plan = await getPlanSnapshot();
   if (!plan) {

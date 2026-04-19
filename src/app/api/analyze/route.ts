@@ -2,20 +2,10 @@ import { NextRequest } from "next/server";
 import { getGeminiClient, modelForTier } from "@/lib/gemini";
 import { ANALYSIS_SYSTEM_PROMPT } from "@/lib/prompts";
 import { consumeUsage, refundUsage } from "@/lib/billing/usage";
-import type {
-  AnalysisReport,
-  ChatMessage,
-  Competitor,
-  ExpandedInsights,
-} from "@/lib/types";
+import { AnalyzeBodySchema, parseBody } from "@/lib/validation";
+import type { AnalysisReport, ExpandedInsights } from "@/lib/types";
 
 export const runtime = "nodejs";
-
-interface AnalyzeRequestBody {
-  messages: ChatMessage[];
-  ideaSummary: string;
-  competitors: Competitor[];
-}
 
 // Strip `insights` entirely if the model returned a malformed payload.
 // We'd rather render the original report cleanly than explode the UI on
@@ -156,19 +146,16 @@ function extractJson(raw: string): string {
 }
 
 export async function POST(request: NextRequest) {
-  let body: AnalyzeRequestBody;
+  let raw: unknown;
   try {
-    body = (await request.json()) as AnalyzeRequestBody;
+    raw = await request.json();
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const { messages, ideaSummary, competitors } = body;
-  if (!ideaSummary) {
-    return Response.json(
-      { error: "ideaSummary is required" },
-      { status: 400 }
-    );
-  }
+
+  const parsed = parseBody(AnalyzeBodySchema, raw);
+  if (!parsed.ok) return parsed.response;
+  const { messages, ideaSummary, competitors } = parsed.data;
 
   // Resolve the Gemini client FIRST so a missing API key never burns a
   // quota slot. Only once we know the downstream call is reachable do we

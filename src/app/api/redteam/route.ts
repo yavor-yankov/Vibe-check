@@ -2,21 +2,10 @@ import { NextRequest } from "next/server";
 import { getGeminiClient, modelForTier } from "@/lib/gemini";
 import { RED_TEAM_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
-import type {
-  AnalysisReport,
-  ChatMessage,
-  Competitor,
-  RedTeamReport,
-} from "@/lib/types";
+import { RedTeamBodySchema, parseBody } from "@/lib/validation";
+import type { RedTeamReport } from "@/lib/types";
 
 export const runtime = "nodejs";
-
-interface RedTeamRequestBody {
-  ideaSummary: string;
-  messages?: ChatMessage[];
-  competitors?: Competitor[];
-  report?: AnalysisReport | null;
-}
 
 function extractJson(raw: string): string {
   const trimmed = raw.trim();
@@ -31,19 +20,16 @@ function extractJson(raw: string): string {
 }
 
 export async function POST(request: NextRequest) {
-  let body: RedTeamRequestBody;
+  let raw: unknown;
   try {
-    body = (await request.json()) as RedTeamRequestBody;
+    raw = await request.json();
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const { ideaSummary, messages, competitors, report } = body;
-  if (!ideaSummary) {
-    return Response.json(
-      { error: "ideaSummary is required" },
-      { status: 400 }
-    );
-  }
+
+  const parsed = parseBody(RedTeamBodySchema, raw);
+  if (!parsed.ok) return parsed.response;
+  const { ideaSummary, messages, competitors, report } = parsed.data;
 
   // Red-team doesn't consume monthly quota — it's part of the same
   // vibe check that /api/analyze already charged. But we still need the
