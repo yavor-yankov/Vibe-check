@@ -44,8 +44,14 @@ function consumeAuthHash(): HashResult {
     return { kind: "none" };
   }
   // Strip tokens from the URL immediately so they can't leak via referer
-  // headers, browser history, or a stray copy-paste.
-  window.history.replaceState(null, "", window.location.pathname);
+  // headers, browser history, or a stray copy-paste. Preserve the search
+  // string so a page refresh doesn't lose `?next=…` (used for the
+  // post-signin redirect target).
+  window.history.replaceState(
+    null,
+    "",
+    window.location.pathname + window.location.search
+  );
   if (errorDescription) {
     return { kind: "error", message: errorDescription };
   }
