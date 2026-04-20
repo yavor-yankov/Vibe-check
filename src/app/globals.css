@@ -93,6 +93,227 @@ html, body {
 }
 
 /* =========================================================
+   Landing page — animation keyframes & utilities
+   ========================================================= */
+
+/* Slow up/down bobbing for floating elements */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-18px); }
+}
+
+/* Gradient color shift for animated heading text */
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Scale entrance from 0.95 with opacity */
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Directional slide reveals */
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideInUp {
+  from { opacity: 0; transform: translateY(40px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Hero staggered fade-in-up (longer travel for landing hero) */
+@keyframes heroFadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Subtle glow pulse for step numbers */
+@keyframes pulseGlow {
+  0%, 100% { text-shadow: 0 0 6px rgba(249, 115, 22, 0.25); }
+  50% { text-shadow: 0 0 20px rgba(249, 115, 22, 0.6), 0 0 40px rgba(249, 115, 22, 0.2); }
+}
+
+/* Very slow circular orbit for floating blobs */
+@keyframes orbitSlow {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(30px, -20px) rotate(90deg); }
+  50% { transform: translate(0, -35px) rotate(180deg); }
+  75% { transform: translate(-30px, -20px) rotate(270deg); }
+  100% { transform: translate(0, 0) rotate(360deg); }
+}
+
+/* Slow rotation for sparkle icon */
+@keyframes rotateSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Subtle radial gradient pulse for CTA background */
+@keyframes radialPulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.05); }
+}
+
+/* 3D perspective tilt entrance for mock report card */
+@keyframes tiltIn {
+  from {
+    opacity: 0;
+    transform: perspective(800px) rotateX(6deg) rotateY(-4deg) translateY(30px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: perspective(800px) rotateX(0deg) rotateY(0deg) translateY(0) scale(1);
+  }
+}
+
+/* Animated gradient border shift */
+@keyframes borderGradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Particle float (different from main float — includes horizontal drift) */
+@keyframes particleDrift {
+  0%   { transform: translateY(0) translateX(0); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(-100vh) translateX(40px); opacity: 0; }
+}
+
+/* Icon pulse on hover */
+@keyframes iconPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+/* Counter flash — brief highlight when number appears */
+@keyframes counterReveal {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Scroll-triggered animation utility ──────────────────────── */
+.animate-on-scroll {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.animate-on-scroll.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Directional variants */
+.animate-on-scroll.from-left {
+  transform: translateX(-40px);
+}
+.animate-on-scroll.from-left.is-visible {
+  transform: translateX(0);
+}
+.animate-on-scroll.from-right {
+  transform: translateX(40px);
+}
+.animate-on-scroll.from-right.is-visible {
+  transform: translateX(0);
+}
+.animate-on-scroll.from-scale {
+  transform: scale(0.92);
+}
+.animate-on-scroll.from-scale.is-visible {
+  transform: scale(1);
+}
+
+/* Stagger children delays */
+.stagger-1 { transition-delay: 0.08s; }
+.stagger-2 { transition-delay: 0.16s; }
+.stagger-3 { transition-delay: 0.24s; }
+.stagger-4 { transition-delay: 0.32s; }
+.stagger-5 { transition-delay: 0.40s; }
+
+/* ── Grid pattern overlay (hero background) ──────────────────── */
+.hero-grid-pattern {
+  background-image:
+    linear-gradient(to right, rgba(249, 115, 22, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(249, 115, 22, 0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+@media (prefers-color-scheme: dark) {
+  .hero-grid-pattern {
+    background-image:
+      linear-gradient(to right, rgba(249, 115, 22, 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(249, 115, 22, 0.06) 1px, transparent 1px);
+  }
+}
+
+/* ── Animated gradient border wrapper for "Most popular" card ── */
+.animated-gradient-border {
+  position: relative;
+  border: none !important;
+}
+.animated-gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: -1.5px;
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    #f97316 0%,
+    #fb923c 25%,
+    #fdba74 50%,
+    #fb923c 75%,
+    #f97316 100%
+  );
+  background-size: 300% 300%;
+  animation: borderGradientShift 4s ease infinite;
+  z-index: -1;
+}
+
+/* ── Feature card hover effects ──────────────────────────────── */
+.feature-card-hover {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.3s ease,
+              border-color 0.3s ease;
+}
+.feature-card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px -8px rgba(249, 115, 22, 0.15);
+  border-color: rgba(249, 115, 22, 0.4) !important;
+}
+.feature-card-hover:hover .feature-icon {
+  animation: iconPulse 0.6s ease;
+}
+
+/* ── Reduce motion ───────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .animate-on-scroll {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .animated-gradient-border::before {
+    animation: none;
+  }
+  .hero-grid-pattern {
+    background-image: none;
+  }
+  * {
+    animation-duration: 0.01s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01s !important;
+  }
+}
+
+/* =========================================================
    Print / PDF export styles
    ========================================================= */
 @media print {

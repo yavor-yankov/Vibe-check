@@ -17,6 +17,201 @@ import {
 import { PRICING_TIERS } from "@/lib/billing/plan";
 import { useTranslation } from "@/lib/i18n/useTranslation";
 import LanguagePicker from "@/components/LanguagePicker";
+import { useEffect, useRef, useState } from "react";
+
+// ─── useInView hook ──────────────────────────────────────────────────────────
+
+function useInView(options?: IntersectionObserverInit) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            // Once visible, stop observing
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.15, ...options }
+    );
+
+    // Observe the container and all children with animate-on-scroll
+    const animatedChildren = el.querySelectorAll(".animate-on-scroll");
+    animatedChildren.forEach((child) => observer.observe(child));
+    if (el.classList.contains("animate-on-scroll")) {
+      observer.observe(el);
+    }
+
+    return () => observer.disconnect();
+  }, [options]);
+
+  return ref;
+}
+
+// ─── AnimatedCounter ─────────────────────────────────────────────────────────
+
+function AnimatedCounter({ value, suffix = "" }: { value: string; suffix?: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [displayed, setDisplayed] = useState(value);
+  const hasAnimated = useRef(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && !hasAnimated.current) {
+            hasAnimated.current = true;
+            // Parse numeric part
+            const numericMatch = value.match(/^([\d.]+)/);
+            if (numericMatch) {
+              const target = parseFloat(numericMatch[1]);
+              const isFloat = numericMatch[1].includes(".");
+              const prefix = "";
+              const rest = value.slice(numericMatch[1].length);
+              const duration = 1200;
+              const startTime = performance.now();
+
+              function animate(now: number) {
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                // Ease out cubic
+                const eased = 1 - Math.pow(1 - progress, 3);
+                const current = eased * target;
+
+                if (isFloat) {
+                  setDisplayed(prefix + current.toFixed(1) + rest);
+                } else {
+                  setDisplayed(prefix + Math.round(current) + rest);
+                }
+
+                if (progress < 1) {
+                  requestAnimationFrame(animate);
+                } else {
+                  setDisplayed(value);
+                }
+              }
+
+              requestAnimationFrame(animate);
+            }
+            observer.unobserve(el);
+          }
+        });
+      },
+      { threshold: 0.5 }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [value]);
+
+  return (
+    <span
+      ref={ref}
+      style={{ animation: "counterReveal 0.6s ease-out backwards" }}
+    >
+      {displayed}
+      {suffix}
+    </span>
+  );
+}
+
+// ─── Floating particles ──────────────────────────────────────────────────────
+
+function FloatingParticles() {
+  const particles = [
+    { size: 3, left: "10%", delay: "0s", duration: "18s", opacity: 0.3 },
+    { size: 2, left: "20%", delay: "3s", duration: "22s", opacity: 0.2 },
+    { size: 4, left: "35%", delay: "1s", duration: "16s", opacity: 0.25 },
+    { size: 2, left: "50%", delay: "5s", duration: "20s", opacity: 0.15 },
+    { size: 3, left: "65%", delay: "2s", duration: "19s", opacity: 0.2 },
+    { size: 2, left: "75%", delay: "4s", duration: "24s", opacity: 0.3 },
+    { size: 3, left: "88%", delay: "0.5s", duration: "17s", opacity: 0.2 },
+    { size: 2, left: "95%", delay: "6s", duration: "21s", opacity: 0.15 },
+  ];
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
+      {particles.map((p, i) => (
+        <div
+          key={i}
+          className="absolute rounded-full"
+          style={{
+            width: p.size,
+            height: p.size,
+            left: p.left,
+            bottom: "-10px",
+            backgroundColor: "var(--accent)",
+            opacity: p.opacity,
+            animation: `particleDrift ${p.duration} linear ${p.delay} infinite`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ─── Floating orbs ───────────────────────────────────────────────────────────
+
+function FloatingOrbs() {
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
+      {/* Large warm orb top-right */}
+      <div
+        className="absolute"
+        style={{
+          width: 300,
+          height: 300,
+          top: "-60px",
+          right: "-80px",
+          borderRadius: "50%",
+          background:
+            "radial-gradient(circle, rgba(249,115,22,0.08) 0%, transparent 70%)",
+          animation: "orbitSlow 30s linear infinite",
+          filter: "blur(40px)",
+        }}
+      />
+      {/* Medium cool orb bottom-left */}
+      <div
+        className="absolute"
+        style={{
+          width: 220,
+          height: 220,
+          bottom: "60px",
+          left: "-60px",
+          borderRadius: "50%",
+          background:
+            "radial-gradient(circle, rgba(249,115,22,0.06) 0%, transparent 70%)",
+          animation: "orbitSlow 40s linear 5s infinite reverse",
+          filter: "blur(50px)",
+        }}
+      />
+      {/* Small accent orb center */}
+      <div
+        className="absolute"
+        style={{
+          width: 120,
+          height: 120,
+          top: "40%",
+          left: "60%",
+          borderRadius: "50%",
+          background:
+            "radial-gradient(circle, rgba(251,146,60,0.07) 0%, transparent 70%)",
+          animation: "float 8s ease-in-out infinite",
+          filter: "blur(30px)",
+        }}
+      />
+    </div>
+  );
+}
 
 // ─── Hero ─────────────────────────────────────────────────────────────────────
 
@@ -24,7 +219,10 @@ function Hero() {
   const { t } = useTranslation();
 
   return (
-    <section className="relative overflow-hidden pt-24 pb-20 px-6 text-center">
+    <section className="relative overflow-hidden pt-28 pb-24 px-6 text-center">
+      {/* Grid pattern overlay */}
+      <div className="absolute inset-0 hero-grid-pattern -z-10" aria-hidden />
+
       {/* Ambient glow blobs */}
       <div
         aria-hidden
@@ -35,19 +233,32 @@ function Hero() {
         }}
       />
 
-      <div className="mx-auto max-w-3xl">
-        {/* Badge */}
-        <div className="inline-flex items-center gap-2 rounded-full border border-[color:var(--accent)]/30 bg-[color:var(--accent)]/10 px-3 py-1 text-xs font-medium text-[color:var(--accent)] mb-6">
+      {/* Floating elements */}
+      <FloatingOrbs />
+      <FloatingParticles />
+
+      <div className="relative mx-auto max-w-3xl">
+        {/* Badge — stagger 0 */}
+        <div
+          className="inline-flex items-center gap-2 rounded-full border border-[color:var(--accent)]/30 bg-[color:var(--accent)]/10 px-3 py-1 text-xs font-medium text-[color:var(--accent)] mb-6"
+          style={{ animation: "heroFadeInUp 0.8s cubic-bezier(0.16,1,0.3,1) 0.1s backwards" }}
+        >
           <Star size={12} fill="currentColor" />
           {t("landing.hero.badge")}
         </div>
 
-        <h1 className="text-5xl md:text-6xl font-bold tracking-tight leading-tight">
+        {/* Heading — stagger 1 */}
+        <h1
+          className="text-5xl md:text-6xl font-bold tracking-tight leading-tight"
+          style={{ animation: "heroFadeInUp 0.8s cubic-bezier(0.16,1,0.3,1) 0.25s backwards" }}
+        >
           {t("landing.hero.heading1")}
           <span
             style={{
               background:
-                "linear-gradient(135deg, #f97316 0%, #fb923c 50%, #fdba74 100%)",
+                "linear-gradient(135deg, #f97316 0%, #fb923c 25%, #fdba74 50%, #f97316 75%, #fb923c 100%)",
+              backgroundSize: "300% 300%",
+              animation: "gradientShift 5s ease infinite",
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
             }}
@@ -56,33 +267,48 @@ function Hero() {
           </span>
         </h1>
 
-        <p className="mt-5 text-xl text-[color:var(--muted)] max-w-2xl mx-auto leading-relaxed">
+        {/* Description — stagger 2 */}
+        <p
+          className="mt-5 text-xl text-[color:var(--muted)] max-w-2xl mx-auto leading-relaxed"
+          style={{ animation: "heroFadeInUp 0.8s cubic-bezier(0.16,1,0.3,1) 0.4s backwards" }}
+        >
           {t("landing.hero.description")}
         </p>
 
-        <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+        {/* CTA buttons — stagger 3 */}
+        <div
+          className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3"
+          style={{ animation: "heroFadeInUp 0.8s cubic-bezier(0.16,1,0.3,1) 0.55s backwards" }}
+        >
           <Link
             href="/signin"
-            className="inline-flex items-center gap-2 rounded-xl bg-[color:var(--accent)] text-white px-6 py-3 text-base font-semibold hover:brightness-110 transition shadow-lg shadow-[color:var(--accent)]/20"
+            className="group inline-flex items-center gap-2 rounded-xl bg-[color:var(--accent)] text-white px-6 py-3 text-base font-semibold hover:brightness-110 transition-all duration-300 shadow-lg shadow-[color:var(--accent)]/20 hover:shadow-xl hover:shadow-[color:var(--accent)]/30 hover:-translate-y-0.5"
           >
             {t("landing.hero.ctaPrimary")}
-            <ArrowRight size={18} />
+            <ArrowRight size={18} className="transition-transform duration-300 group-hover:translate-x-0.5" />
           </Link>
           <Link
             href="/pricing"
-            className="inline-flex items-center gap-2 rounded-xl border border-[color:var(--border)] bg-[color:var(--card)] px-6 py-3 text-base font-medium hover:bg-[color:var(--background)] transition"
+            className="inline-flex items-center gap-2 rounded-xl border border-[color:var(--border)] bg-[color:var(--card)] px-6 py-3 text-base font-medium hover:bg-[color:var(--background)] hover:border-[color:var(--accent)]/30 transition-all duration-300"
           >
             {t("landing.hero.ctaSecondary")}
           </Link>
         </div>
 
-        <p className="mt-4 text-sm text-[color:var(--muted)]">
+        {/* Subtext — stagger 4 */}
+        <p
+          className="mt-4 text-sm text-[color:var(--muted)]"
+          style={{ animation: "heroFadeInUp 0.8s cubic-bezier(0.16,1,0.3,1) 0.7s backwards" }}
+        >
           {t("landing.hero.subtext")}
         </p>
       </div>
 
-      {/* Mock report card preview */}
-      <div className="mt-16 mx-auto max-w-2xl">
+      {/* Mock report card preview — 3D tilt entrance */}
+      <div
+        className="mt-16 mx-auto max-w-2xl"
+        style={{ animation: "tiltIn 1s cubic-bezier(0.16,1,0.3,1) 0.9s backwards" }}
+      >
         <MockReportPreview />
       </div>
     </section>
@@ -107,7 +333,7 @@ function MockReportPreview() {
   ];
 
   return (
-    <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--card)] shadow-2xl shadow-black/10 overflow-hidden text-left">
+    <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--card)] shadow-2xl shadow-black/10 overflow-hidden text-left hover:shadow-3xl transition-shadow duration-500">
       {/* Title bar */}
       <div className="px-5 py-3.5 border-b border-[color:var(--border)] flex items-center gap-2">
         <div className="w-3 h-3 rounded-full bg-[color:var(--bad)] opacity-80" />
@@ -146,7 +372,7 @@ function MockReportPreview() {
             </div>
             <div className="h-1.5 rounded-full bg-[color:var(--border)] overflow-hidden">
               <div
-                className="h-full rounded-full bg-[color:var(--accent)]"
+                className="h-full rounded-full bg-[color:var(--accent)] transition-all duration-1000"
                 style={{ width: `${value * 10}%` }}
               />
             </div>
@@ -158,7 +384,7 @@ function MockReportPreview() {
           {chips.map((chip) => (
             <span
               key={chip}
-              className="text-xs px-2.5 py-1 rounded-full border border-[color:var(--border)] text-[color:var(--muted)]"
+              className="text-xs px-2.5 py-1 rounded-full border border-[color:var(--border)] text-[color:var(--muted)] hover:border-[color:var(--accent)]/30 transition-colors duration-300"
             >
               {chip}
             </span>
@@ -173,6 +399,7 @@ function MockReportPreview() {
 
 function StatsStrip() {
   const { t } = useTranslation();
+  const sectionRef = useInView();
 
   const stats = [
     { value: t("landing.stats.value1"), label: t("landing.stats.label1") },
@@ -183,11 +410,14 @@ function StatsStrip() {
 
   return (
     <section className="border-y border-[color:var(--border)] bg-[color:var(--card)] py-8 px-6">
-      <div className="mx-auto max-w-4xl grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-        {stats.map(({ value, label }) => (
-          <div key={label}>
+      <div ref={sectionRef} className="mx-auto max-w-4xl grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+        {stats.map(({ value, label }, i) => (
+          <div
+            key={label}
+            className={`animate-on-scroll stagger-${i + 1}`}
+          >
             <div className="text-2xl font-bold text-[color:var(--foreground)]">
-              {value}
+              <AnimatedCounter value={value} />
             </div>
             <div className="mt-1 text-sm text-[color:var(--muted)]">{label}</div>
           </div>
@@ -201,6 +431,7 @@ function StatsStrip() {
 
 function HowItWorks() {
   const { t } = useTranslation();
+  const sectionRef = useInView();
 
   const steps = [
     {
@@ -208,43 +439,53 @@ function HowItWorks() {
       step: "01",
       title: t("landing.howItWorks.step1Title"),
       description: t("landing.howItWorks.step1Description"),
+      direction: "from-left",
     },
     {
       icon: Globe,
       step: "02",
       title: t("landing.howItWorks.step2Title"),
       description: t("landing.howItWorks.step2Description"),
+      direction: "",
     },
     {
       icon: BarChart3,
       step: "03",
       title: t("landing.howItWorks.step3Title"),
       description: t("landing.howItWorks.step3Description"),
+      direction: "from-right",
     },
   ];
 
   return (
     <section className="py-24 px-6">
-      <div className="mx-auto max-w-5xl">
+      <div ref={sectionRef} className="mx-auto max-w-5xl">
         <div className="text-center mb-14">
-          <div className="text-xs uppercase tracking-widest text-[color:var(--accent)] font-semibold mb-3">
+          <div className="text-xs uppercase tracking-widest text-[color:var(--accent)] font-semibold mb-3 animate-on-scroll">
             {t("landing.howItWorks.sectionLabel")}
           </div>
-          <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
+          <h2 className="text-3xl md:text-4xl font-bold tracking-tight animate-on-scroll stagger-1">
             {t("landing.howItWorks.heading")}
           </h2>
-          <p className="mt-4 text-[color:var(--muted)] max-w-xl mx-auto">
+          <p className="mt-4 text-[color:var(--muted)] max-w-xl mx-auto animate-on-scroll stagger-2">
             {t("landing.howItWorks.description")}
           </p>
         </div>
 
         <div className="grid md:grid-cols-3 gap-6">
-          {steps.map(({ icon: Icon, step, title, description }) => (
+          {steps.map(({ icon: Icon, step, title, description, direction }, i) => (
             <div
               key={step}
-              className="relative rounded-2xl border border-[color:var(--border)] bg-[color:var(--card)] p-6"
+              className={`relative rounded-2xl border border-[color:var(--border)] bg-[color:var(--card)] p-6 animate-on-scroll ${direction} stagger-${i + 1} hover:border-[color:var(--accent)]/30 transition-colors duration-300`}
             >
-              <div className="absolute top-5 right-5 text-5xl font-black text-[color:var(--border)] select-none leading-none">
+              <div
+                className="absolute top-5 right-5 text-5xl font-black select-none leading-none"
+                style={{
+                  color: "var(--border)",
+                  animation: "pulseGlow 3s ease-in-out infinite",
+                  animationDelay: `${i * 0.5}s`,
+                }}
+              >
                 {step}
               </div>
               <div className="w-10 h-10 rounded-xl bg-[color:var(--accent)]/10 flex items-center justify-center mb-4">
@@ -266,6 +507,7 @@ function HowItWorks() {
 
 function Features() {
   const { t } = useTranslation();
+  const sectionRef = useInView();
 
   const features = [
     { icon: BarChart3, titleKey: "landing.features.feature1Title" as const, descKey: "landing.features.feature1Description" as const },
@@ -278,26 +520,26 @@ function Features() {
 
   return (
     <section className="py-24 px-6 bg-[color:var(--card)] border-y border-[color:var(--border)]">
-      <div className="mx-auto max-w-5xl">
+      <div ref={sectionRef} className="mx-auto max-w-5xl">
         <div className="text-center mb-14">
-          <div className="text-xs uppercase tracking-widest text-[color:var(--accent)] font-semibold mb-3">
+          <div className="text-xs uppercase tracking-widest text-[color:var(--accent)] font-semibold mb-3 animate-on-scroll">
             {t("landing.features.sectionLabel")}
           </div>
-          <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
+          <h2 className="text-3xl md:text-4xl font-bold tracking-tight animate-on-scroll stagger-1">
             {t("landing.features.heading")}
           </h2>
-          <p className="mt-4 text-[color:var(--muted)] max-w-xl mx-auto">
+          <p className="mt-4 text-[color:var(--muted)] max-w-xl mx-auto animate-on-scroll stagger-2">
             {t("landing.features.description")}
           </p>
         </div>
 
         <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {features.map(({ icon: Icon, titleKey, descKey }) => (
+          {features.map(({ icon: Icon, titleKey, descKey }, i) => (
             <div
               key={titleKey}
-              className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)] p-5 hover:border-[color:var(--accent)]/40 transition"
+              className={`rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)] p-5 feature-card-hover animate-on-scroll stagger-${Math.min(i + 1, 5)}`}
             >
-              <div className="w-9 h-9 rounded-lg bg-[color:var(--accent)]/10 flex items-center justify-center mb-3">
+              <div className="w-9 h-9 rounded-lg bg-[color:var(--accent)]/10 flex items-center justify-center mb-3 feature-icon">
                 <Icon size={18} className="text-[color:var(--accent)]" />
               </div>
               <h3 className="text-sm font-semibold mb-1.5">
@@ -318,6 +560,7 @@ function Features() {
 
 function PricingSection() {
   const { t } = useTranslation();
+  const sectionRef = useInView();
 
   const tiers = [
     PRICING_TIERS.free,
@@ -327,29 +570,29 @@ function PricingSection() {
 
   return (
     <section className="py-24 px-6" id="pricing">
-      <div className="mx-auto max-w-5xl">
+      <div ref={sectionRef} className="mx-auto max-w-5xl">
         <div className="text-center mb-14">
-          <div className="text-xs uppercase tracking-widest text-[color:var(--accent)] font-semibold mb-3">
+          <div className="text-xs uppercase tracking-widest text-[color:var(--accent)] font-semibold mb-3 animate-on-scroll">
             {t("landing.pricing.sectionLabel")}
           </div>
-          <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
+          <h2 className="text-3xl md:text-4xl font-bold tracking-tight animate-on-scroll stagger-1">
             {t("landing.pricing.heading")}
           </h2>
-          <p className="mt-4 text-[color:var(--muted)] max-w-xl mx-auto">
+          <p className="mt-4 text-[color:var(--muted)] max-w-xl mx-auto animate-on-scroll stagger-2">
             {t("landing.pricing.description")}
           </p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
-          {tiers.map((tier) => {
+          {tiers.map((tier, i) => {
             const highlight = tier.tier === "pro";
             return (
               <div
                 key={tier.tier}
-                className={`relative rounded-2xl border p-6 flex flex-col transition ${
+                className={`relative rounded-2xl border p-6 flex flex-col animate-on-scroll from-scale stagger-${i + 1} transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${
                   highlight
-                    ? "border-[color:var(--accent)] bg-[color:var(--card)] shadow-xl shadow-[color:var(--accent)]/10"
-                    : "border-[color:var(--border)] bg-[color:var(--card)]"
+                    ? "animated-gradient-border bg-[color:var(--card)] shadow-xl shadow-[color:var(--accent)]/10"
+                    : "border-[color:var(--border)] bg-[color:var(--card)] hover:border-[color:var(--accent)]/30"
                 }`}
               >
                 {highlight && (
@@ -390,10 +633,10 @@ function PricingSection() {
                 <div className="mt-6">
                   <Link
                     href="/signin"
-                    className={`block text-center rounded-xl py-2.5 text-sm font-semibold transition ${
+                    className={`block text-center rounded-xl py-2.5 text-sm font-semibold transition-all duration-300 ${
                       highlight
-                        ? "bg-[color:var(--accent)] text-white hover:brightness-110 shadow-lg shadow-[color:var(--accent)]/20"
-                        : "border border-[color:var(--border)] hover:bg-[color:var(--background)]"
+                        ? "bg-[color:var(--accent)] text-white hover:brightness-110 shadow-lg shadow-[color:var(--accent)]/20 hover:shadow-xl hover:shadow-[color:var(--accent)]/30"
+                        : "border border-[color:var(--border)] hover:bg-[color:var(--background)] hover:border-[color:var(--accent)]/30"
                     }`}
                   >
                     {tier.cta}
@@ -404,7 +647,7 @@ function PricingSection() {
           })}
         </div>
 
-        <p className="mt-8 text-xs text-[color:var(--muted)] text-center">
+        <p className="mt-8 text-xs text-[color:var(--muted)] text-center animate-on-scroll stagger-4">
           {t("landing.pricing.footer")}
         </p>
       </div>
@@ -416,6 +659,7 @@ function PricingSection() {
 
 function FAQ() {
   const { t } = useTranslation();
+  const sectionRef = useInView();
 
   const faqs = [
     { q: t("landing.faq.q1"), a: t("landing.faq.a1") },
@@ -428,27 +672,27 @@ function FAQ() {
 
   return (
     <section className="py-24 px-6 bg-[color:var(--card)] border-y border-[color:var(--border)]">
-      <div className="mx-auto max-w-2xl">
+      <div ref={sectionRef} className="mx-auto max-w-2xl">
         <div className="text-center mb-12">
-          <div className="text-xs uppercase tracking-widest text-[color:var(--accent)] font-semibold mb-3">
+          <div className="text-xs uppercase tracking-widest text-[color:var(--accent)] font-semibold mb-3 animate-on-scroll">
             {t("landing.faq.sectionLabel")}
           </div>
-          <h2 className="text-3xl font-bold tracking-tight">
+          <h2 className="text-3xl font-bold tracking-tight animate-on-scroll stagger-1">
             {t("landing.faq.heading")}
           </h2>
         </div>
 
         <div className="space-y-2">
-          {faqs.map(({ q, a }) => (
+          {faqs.map(({ q, a }, i) => (
             <details
               key={q}
-              className="group rounded-xl border border-[color:var(--border)] bg-[color:var(--background)] overflow-hidden"
+              className={`group rounded-xl border border-[color:var(--border)] bg-[color:var(--background)] overflow-hidden animate-on-scroll stagger-${Math.min(i + 1, 5)} hover:border-[color:var(--accent)]/20 transition-colors duration-300`}
             >
               <summary className="flex items-center justify-between gap-4 px-5 py-4 cursor-pointer text-sm font-medium list-none select-none hover:bg-[color:var(--card)] transition">
                 <span>{q}</span>
                 <ChevronDown
                   size={16}
-                  className="shrink-0 text-[color:var(--muted)] transition-transform group-open:rotate-180"
+                  className="shrink-0 text-[color:var(--muted)] transition-transform duration-300 group-open:rotate-180"
                 />
               </summary>
               <div className="px-5 pb-4 text-sm text-[color:var(--muted)] leading-relaxed">
@@ -466,36 +710,52 @@ function FAQ() {
 
 function CTABanner() {
   const { t } = useTranslation();
+  const sectionRef = useInView();
 
   return (
-    <section className="py-24 px-6 text-center">
-      <div className="mx-auto max-w-2xl">
+    <section className="relative py-24 px-6 text-center overflow-hidden">
+      {/* Animated radial gradient pulse background */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        aria-hidden
+        style={{
+          background:
+            "radial-gradient(ellipse 60% 60% at 50% 50%, rgba(249,115,22,0.06) 0%, transparent 70%)",
+          animation: "radialPulse 6s ease-in-out infinite",
+        }}
+      />
+
+      <div ref={sectionRef} className="relative mx-auto max-w-2xl">
         <div
-          className="inline-flex w-14 h-14 rounded-2xl items-center justify-center mb-6"
+          className="inline-flex w-14 h-14 rounded-2xl items-center justify-center mb-6 animate-on-scroll"
           style={{
             background:
               "linear-gradient(135deg, #f97316 0%, #fb923c 100%)",
           }}
         >
-          <Sparkles size={28} className="text-white" />
+          <Sparkles
+            size={28}
+            className="text-white"
+            style={{ animation: "rotateSlow 12s linear infinite" }}
+          />
         </div>
-        <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
+        <h2 className="text-3xl md:text-4xl font-bold tracking-tight animate-on-scroll stagger-1">
           {t("landing.cta.heading")}
         </h2>
-        <p className="mt-4 text-[color:var(--muted)] text-lg max-w-lg mx-auto">
+        <p className="mt-4 text-[color:var(--muted)] text-lg max-w-lg mx-auto animate-on-scroll stagger-2">
           {t("landing.cta.description")}
         </p>
-        <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+        <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3 animate-on-scroll stagger-3">
           <Link
             href="/signin"
-            className="inline-flex items-center gap-2 rounded-xl bg-[color:var(--accent)] text-white px-7 py-3.5 text-base font-semibold hover:brightness-110 transition shadow-lg shadow-[color:var(--accent)]/20"
+            className="group inline-flex items-center gap-2 rounded-xl bg-[color:var(--accent)] text-white px-7 py-3.5 text-base font-semibold hover:brightness-110 transition-all duration-300 shadow-lg shadow-[color:var(--accent)]/20 hover:shadow-xl hover:shadow-[color:var(--accent)]/30 hover:-translate-y-0.5"
           >
             {t("landing.cta.primaryButton")}
-            <ArrowRight size={18} />
+            <ArrowRight size={18} className="transition-transform duration-300 group-hover:translate-x-0.5" />
           </Link>
           <Link
             href="/pricing"
-            className="text-sm text-[color:var(--muted)] hover:text-[color:var(--foreground)] transition"
+            className="text-sm text-[color:var(--muted)] hover:text-[color:var(--foreground)] transition-colors duration-300"
           >
             {t("landing.cta.secondaryLink")}
           </Link>
@@ -512,7 +772,8 @@ function Nav() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-[color:var(--border)] bg-[color:var(--background)]/80 backdrop-blur-md">
-      <div className="mx-auto max-w-6xl px-6 h-14 flex items-center justify-between">
+      <div className="mx-auto max-w-6xl px-6 h-14 flex items-center">
+        {/* Left: Logo */}
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-[color:var(--accent)] flex items-center justify-center">
             <Sparkles size={15} className="text-white" />
@@ -520,22 +781,26 @@ function Nav() {
           <span className="font-semibold text-sm">{t("landing.nav.brand")}</span>
         </div>
 
-        <nav className="hidden sm:flex items-center gap-6 text-sm text-[color:var(--muted)]">
-          <Link href="#pricing" className="hover:text-[color:var(--foreground)] transition">
+        {/* Center: Navigation links */}
+        <nav className="hidden sm:flex items-center justify-center flex-1">
+          <Link
+            href="#pricing"
+            className="text-sm text-[color:var(--muted)] hover:text-[color:var(--foreground)] transition-colors duration-200"
+          >
             {t("landing.nav.pricing")}
           </Link>
-          <Link href="/signin" className="hover:text-[color:var(--foreground)] transition">
-            {t("landing.nav.signIn")}
-          </Link>
-          <LanguagePicker />
         </nav>
 
-        <Link
-          href="/signin"
-          className="rounded-lg bg-[color:var(--accent)] text-white px-4 py-1.5 text-sm font-medium hover:brightness-110 transition"
-        >
-          {t("landing.nav.startFree")}
-        </Link>
+        {/* Right: CTA button + language picker */}
+        <div className="flex items-center gap-3">
+          <Link
+            href="/signin"
+            className="rounded-lg bg-[color:var(--accent)] text-white px-4 py-1.5 text-sm font-medium hover:brightness-110 transition-all duration-200 hover:shadow-md hover:shadow-[color:var(--accent)]/20"
+          >
+            {t("landing.nav.startFree")}
+          </Link>
+          <LanguagePicker subtle />
+        </div>
       </div>
     </header>
   );
@@ -558,10 +823,10 @@ function Footer() {
           <span>{t("landing.footer.poweredBy")}</span>
         </div>
         <div className="flex items-center gap-5">
-          <Link href="/pricing" className="hover:text-[color:var(--foreground)] transition">
+          <Link href="/pricing" className="hover:text-[color:var(--foreground)] transition-colors duration-200">
             {t("landing.footer.pricing")}
           </Link>
-          <Link href="/signin" className="hover:text-[color:var(--foreground)] transition">
+          <Link href="/signin" className="hover:text-[color:var(--foreground)] transition-colors duration-200">
             {t("landing.footer.signIn")}
           </Link>
         </div>
