@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getGeminiClient, modelForTier, friendlyAIError } from "@/lib/gemini";
+import { getGeminiClient, modelForTier, friendlyAIError, geminiCall } from "@/lib/gemini";
 import { PERSONA_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { RedTeamBodySchema, parseBody } from "@/lib/validation";
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
   });
 
   try {
-    const result = await model.generateContent(userPrompt);
+    const result = await geminiCall(() => model.generateContent(userPrompt));
     const rawText = result.response.text();
     const jsonStr = extractJson(rawText);
     const data = JSON.parse(jsonStr) as { personas?: Persona[] };

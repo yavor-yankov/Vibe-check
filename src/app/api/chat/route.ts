@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getGeminiClient, modelForTier, friendlyAIError } from "@/lib/gemini";
+import { getGeminiClient, modelForTier, friendlyAIError, geminiCall } from "@/lib/gemini";
 import { INTERVIEW_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { ChatBodySchema, parseBody } from "@/lib/validation";
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const chat = model.startChat({ history });
-    const result = await chat.sendMessageStream(last.content);
+    const result = await geminiCall(() => chat.sendMessageStream(last.content));
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({

@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getGeminiClient, modelForTier, friendlyAIError } from "@/lib/gemini";
+import { getGeminiClient, modelForTier, friendlyAIError, geminiCall } from "@/lib/gemini";
 import { ANALYSIS_SYSTEM_PROMPT } from "@/lib/prompts";
 import { consumeUsage, refundUsage } from "@/lib/billing/usage";
 import { AnalyzeBodySchema, parseBody } from "@/lib/validation";
@@ -284,7 +284,7 @@ export async function POST(request: NextRequest) {
   });
 
   try {
-    const result = await model.generateContent(userPrompt);
+    const result = await geminiCall(() => model.generateContent(userPrompt));
     const raw = result.response.text();
     const jsonStr = extractJson(raw);
     const parsed = JSON.parse(jsonStr) as AnalysisReport & {

@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getGeminiClient, modelForTier, friendlyAIError } from "@/lib/gemini";
+import { getGeminiClient, modelForTier, friendlyAIError, geminiCall } from "@/lib/gemini";
 import { NAME_SUGGESTION_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { SearchBodySchema, parseBody } from "@/lib/validation";
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
   });
 
   try {
-    const result = await model.generateContent(ideaSummary);
+    const result = await geminiCall(() => model.generateContent(ideaSummary));
     const rawText = result.response.text();
     const jsonStr = extractJson(rawText);
     const data = JSON.parse(jsonStr) as {

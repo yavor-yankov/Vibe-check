@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getGeminiClient, modelForTier, friendlyAIError } from "@/lib/gemini";
+import { getGeminiClient, modelForTier, friendlyAIError, geminiCall } from "@/lib/gemini";
 import { RED_TEAM_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { RedTeamBodySchema, parseBody } from "@/lib/validation";
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
   });
 
   try {
-    const result = await model.generateContent(userPrompt);
+    const result = await geminiCall(() => model.generateContent(userPrompt));
     const raw = result.response.text();
     const jsonStr = extractJson(raw);
     const redTeam = JSON.parse(jsonStr) as RedTeamReport;

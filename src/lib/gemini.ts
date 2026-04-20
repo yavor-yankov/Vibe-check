@@ -52,3 +52,86 @@ export function friendlyAIError(err: unknown): string {
   // Generic fallback — still no raw internals
   return "Something went wrong. Please try again.";
 }
+
+// ---------------------------------------------------------------------------
+// Retry with exponential backoff
+// ---------------------------------------------------------------------------
+
+function isRetryable(err: unknown): boolean {
+  const msg =
+    (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return (
+    msg.includes("429") ||
+    msg.includes("rate") ||
+    msg.includes("quota") ||
+    msg.includes("resource has been exhausted") ||
+    msg.includes("503") ||
+    msg.includes("overloaded") ||
+    msg.includes("unavailable")
+  );
+}
+
+/**
+ * Retry a function up to `maxRetries` times with exponential backoff
+ * when the error looks like a transient rate limit / overload.
+ * Non-retryable errors are thrown immediately.
+ */
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries = 3,
+  baseDelayMs = 2000
+): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt >= maxRetries || !isRetryable(err)) throw err;
+      // Exponential backoff: 2s, 4s, 8s + jitter
+      const delay = baseDelayMs * 2 ** attempt + Math.random() * 1000;
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw lastErr;
+}
+
+// ---------------------------------------------------------------------------
+// Global request queue — serializes Gemini calls to avoid burst 429s
+// ---------------------------------------------------------------------------
+
+const CONCURRENCY = Number(process.env.GEMINI_CONCURRENCY) || 2;
+
+let active = 0;
+const waiting: Array<() => void> = [];
+
+async function acquireSlot(): Promise<void> {
+  if (active < CONCURRENCY) {
+    active++;
+    return;
+  }
+  await new Promise<void>((resolve) => waiting.push(resolve));
+}
+
+function releaseSlot(): void {
+  const next = waiting.shift();
+  if (next) {
+    next(); // hand the slot to the next waiter
+  } else {
+    active--;
+  }
+}
+
+/**
+ * Run a Gemini call through the global queue + retry pipeline.
+ * At most CONCURRENCY (default 2) calls run in parallel; the rest
+ * wait. Each call retries up to 3 times on transient 429/503 errors.
+ */
+export async function geminiCall<T>(fn: () => Promise<T>): Promise<T> {
+  await acquireSlot();
+  try {
+    return await withRetry(fn);
+  } finally {
+    releaseSlot();
+  }
+}
