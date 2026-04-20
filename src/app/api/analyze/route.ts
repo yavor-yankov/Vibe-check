@@ -274,9 +274,9 @@ export async function POST(request: NextRequest) {
     // Analysis failed after we already charged the user — roll the slot
     // back so transient Gemini errors don't eat free-tier quota.
     await refundUsage(plan.userId, plan.usageMonth);
-    const msg = err instanceof Error ? err.message : "analysis failed";
+    log.error({ err }, "Analysis generation failed");
     return Response.json(
-      { error: `Failed to generate analysis: ${msg}` },
+      { error: "Failed to generate analysis. Please try again." },
       { status: 500 }
     );
   }

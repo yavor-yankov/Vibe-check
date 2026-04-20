@@ -30,11 +30,20 @@ type VerdictFilter = "all" | "build_it" | "iterate" | "rethink" | "skip" | "in_p
 
 const VERDICT_LABELS: Record<VerdictFilter, string> = {
   all: "All",
-  build_it: "✅ Build",
-  iterate: "🔄 Iterate",
-  rethink: "🤔 Rethink",
-  skip: "❌ Skip",
-  in_progress: "⏳ In progress",
+  build_it: "Build",
+  iterate: "Iterate",
+  rethink: "Rethink",
+  skip: "Skip",
+  in_progress: "In progress",
+};
+
+const VERDICT_ICONS: Record<VerdictFilter, string> = {
+  all: "",
+  build_it: "\u2705 ",
+  iterate: "\uD83D\uDD04 ",
+  rethink: "\uD83E\uDD14 ",
+  skip: "\u274C ",
+  in_progress: "\u23F3 ",
 };
 
 function relative(ts: number): string {
@@ -211,12 +220,15 @@ export default function Sidebar({
                     key={v}
                     type="button"
                     onClick={() => setVerdictFilter(v === verdictFilter ? "all" : v)}
+                    aria-label={v === "all" ? `Show all ${counts.all} sessions` : `Filter by ${VERDICT_LABELS[v]}, ${counts[v]} sessions`}
+                    aria-pressed={verdictFilter === v}
                     className={`text-[11px] px-2 py-0.5 rounded-full border transition ${
                       verdictFilter === v
                         ? "bg-[color:var(--accent)] text-white border-[color:var(--accent)]"
                         : "border-[color:var(--border)] text-[color:var(--muted)] hover:border-[color:var(--accent)] hover:text-[color:var(--foreground)]"
                     }`}
                   >
+                    <span aria-hidden="true">{VERDICT_ICONS[v]}</span>
                     {VERDICT_LABELS[v]}
                     {v !== "all" && (
                       <span className="ml-1 opacity-70">{counts[v]}</span>

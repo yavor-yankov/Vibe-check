@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { X, Webhook, CheckCircle, AlertCircle, Loader2, Send } from "lucide-react";
 
 interface WebhookSettingsProps {
@@ -15,6 +15,7 @@ export default function WebhookSettings({ onClose }: WebhookSettingsProps) {
   const [status, setStatus] = useState<Status>("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [loading, setLoading] = useState(true);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch("/api/settings/webhook")
@@ -25,6 +26,47 @@ export default function WebhookSettings({ onClose }: WebhookSettingsProps) {
       })
       .catch(() => {/* ignore — just leave blank */})
       .finally(() => setLoading(false));
+  }, []);
+
+  // Escape key handler
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  // Focus trap — keep Tab within the dialog
+  const handleFocusTrap = useCallback((e: KeyboardEvent) => {
+    if (e.key !== "Tab" || !dialogRef.current) return;
+    const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"]), a[href], textarea, select, details > summary'
+    );
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey) {
+      if (document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else {
+      if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    document.addEventListener("keydown", handleFocusTrap);
+    return () => document.removeEventListener("keydown", handleFocusTrap);
+  }, [handleFocusTrap]);
+
+  // Auto-focus the dialog on mount
+  useEffect(() => {
+    dialogRef.current?.focus();
   }, []);
 
   const isDirty = url.trim() !== (savedUrl ?? "");
@@ -88,8 +130,16 @@ export default function WebhookSettings({ onClose }: WebhookSettingsProps) {
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       onClick={(e) => e.target === e.currentTarget && onClose()}
+      aria-hidden="true"
     >
-      <div className="relative w-full max-w-md mx-4 rounded-xl bg-[color:var(--card)] border border-[color:var(--border)] shadow-2xl p-6">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Webhook Integration"
+        tabIndex={-1}
+        className="relative w-full max-w-md mx-4 rounded-xl bg-[color:var(--card)] border border-[color:var(--border)] shadow-2xl p-6 outline-none"
+      >
         {/* Header */}
         <div className="flex items-center gap-3 mb-5">
           <div className="w-9 h-9 rounded-lg bg-[color:var(--accent)]/10 flex items-center justify-center text-[color:var(--accent)]">
@@ -145,19 +195,19 @@ export default function WebhookSettings({ onClose }: WebhookSettingsProps) {
 
             {/* Status messages */}
             {(status === "error" || status === "test_fail") && errorMsg && (
-              <div className="flex items-start gap-2 text-sm text-[color:var(--bad)]">
+              <div className="flex items-start gap-2 text-sm text-[color:var(--bad)]" role="alert">
                 <AlertCircle size={15} className="mt-0.5 shrink-0" />
                 <span>{errorMsg}</span>
               </div>
             )}
             {status === "saved" && (
-              <div className="flex items-center gap-2 text-sm text-[color:var(--good)]">
+              <div className="flex items-center gap-2 text-sm text-[color:var(--good)]" role="status">
                 <CheckCircle size={15} />
                 <span>Webhook URL saved.</span>
               </div>
             )}
             {status === "test_ok" && (
-              <div className="flex items-center gap-2 text-sm text-[color:var(--good)]">
+              <div className="flex items-center gap-2 text-sm text-[color:var(--good)]" role="status">
                 <CheckCircle size={15} />
                 <span>Test payload delivered successfully!</span>
               </div>

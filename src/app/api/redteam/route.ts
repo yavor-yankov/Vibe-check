@@ -4,6 +4,7 @@ import { RED_TEAM_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { RedTeamBodySchema, parseBody } from "@/lib/validation";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
 import type { RedTeamReport } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -85,9 +86,10 @@ export async function POST(request: NextRequest) {
     const redTeam = JSON.parse(jsonStr) as RedTeamReport;
     return Response.json({ redTeam });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "red-team failed";
+    const log = logger.child({ route: "redteam" });
+    log.error({ err }, "Red-team pass failed");
     return Response.json(
-      { error: `Failed to run red-team pass: ${msg}` },
+      { error: "Failed to run red-team analysis. Please try again." },
       { status: 500 }
     );
   }

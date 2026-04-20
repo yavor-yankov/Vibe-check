@@ -66,7 +66,14 @@ export default function UsageBadge({ className, refreshSignal }: UsageBadgeProps
     const data = (await res.json().catch(() => null)) as
       | { url?: string }
       | null;
-    if (data?.url) window.location.href = data.url;
+    if (data?.url) {
+      try {
+        const parsed = new URL(data.url);
+        if (parsed.hostname.endsWith(".stripe.com") || parsed.origin === window.location.origin) {
+          window.location.href = data.url;
+        }
+      } catch { /* invalid URL — ignore */ }
+    }
   };
 
   if (loading) {

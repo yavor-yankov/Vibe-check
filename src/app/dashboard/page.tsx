@@ -228,11 +228,14 @@ export default function Home() {
   const streamAssistantReply = async (sessionWithUser: Session) => {
     setIsStreaming(true);
     setError(null);
+    const chatAbort = new AbortController();
+    const chatTimeout = setTimeout(() => chatAbort.abort(), 60_000);
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: sessionWithUser.messages }),
+        signal: chatAbort.signal,
       });
       if (!res.ok || !res.body) {
         const msg = await res.text().catch(() => "");
@@ -297,9 +300,14 @@ export default function Home() {
         })();
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Unknown error";
-      setError(msg);
+      if ((err as Error)?.name === "AbortError") {
+        setError("Chat request timed out. Please try again.");
+      } else {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        setError(msg);
+      }
     } finally {
+      clearTimeout(chatTimeout);
       setIsStreaming(false);
     }
   };
@@ -417,6 +425,8 @@ export default function Home() {
     const generationAtStart = snapshot.reportGeneration ?? 0;
     setRedTeamError(null);
     setIsRedTeamLoading(true);
+    const rtAbort = new AbortController();
+    const rtTimeout = setTimeout(() => rtAbort.abort(), 45_000);
     try {
       const res = await fetch("/api/redteam", {
         method: "POST",
@@ -427,6 +437,7 @@ export default function Home() {
           competitors: snapshot.competitors,
           report: snapshot.report,
         }),
+        signal: rtAbort.signal,
       });
       const data = (await res.json()) as {
         redTeam?: RedTeamReport;
@@ -452,10 +463,16 @@ export default function Home() {
         live?.id === sessionId &&
         (live.reportGeneration ?? 0) === generationAtStart
       ) {
-        const msg = err instanceof Error ? err.message : "Unknown error";
+        const msg =
+          (err as Error)?.name === "AbortError"
+            ? "Red-team request timed out. Please try again."
+            : err instanceof Error
+              ? err.message
+              : "Unknown error";
         setRedTeamError(msg);
       }
     } finally {
+      clearTimeout(rtTimeout);
       const live = currentRef.current;
       if (
         live?.id === sessionId &&
