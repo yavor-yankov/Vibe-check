@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getGeminiClient, modelForTier, friendlyAIError, geminiCall } from "@/lib/gemini";
+import { getGeminiClient, modelChainForTier, friendlyAIError, geminiCallWithFallback } from "@/lib/gemini";
 import { RED_TEAM_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { RedTeamBodySchema, parseBody } from "@/lib/validation";
@@ -70,17 +70,20 @@ export async function POST(request: NextRequest) {
 
   const userPrompt = `# Idea summary\n${ideaSummary}\n\n# Interview transcript\n${transcript || "(no transcript)"}\n\n# Competitors found on the web\n${competitorBlock}\n\n# Prior analysis context\n${reportBlock}\n\nReturn ONLY the JSON described in your instructions. Focus on specific, concrete failure modes — not generic platitudes. Do not repeat risks already listed above unless you're sharpening them with a new angle.`;
 
-  const model = client.getGenerativeModel({
-    model: modelForTier(plan.tier),
-    systemInstruction: RED_TEAM_SYSTEM_PROMPT,
-    generationConfig: {
-      responseMimeType: "application/json",
-      temperature: 0.8,
-    },
-  });
+  const models = modelChainForTier(plan.tier);
 
   try {
-    const result = await geminiCall(() => model.generateContent(userPrompt));
+    const result = await geminiCallWithFallback(models, (modelName) => {
+      const model = client.getGenerativeModel({
+        model: modelName,
+        systemInstruction: RED_TEAM_SYSTEM_PROMPT,
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: 0.8,
+        },
+      });
+      return model.generateContent(userPrompt);
+    });
     const raw = result.response.text();
     const jsonStr = extractJson(raw);
     const redTeam = JSON.parse(jsonStr) as RedTeamReport;

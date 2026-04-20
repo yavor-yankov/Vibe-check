@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getGeminiClient, modelForTier, friendlyAIError, geminiCall } from "@/lib/gemini";
+import { getGeminiClient, modelChainForTier, friendlyAIError, geminiCallWithFallback } from "@/lib/gemini";
 import { NAME_SUGGESTION_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { SearchBodySchema, parseBody } from "@/lib/validation";
@@ -69,17 +69,20 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: msg }, { status: 500 });
   }
 
-  const model = client.getGenerativeModel({
-    model: modelForTier(plan.tier),
-    systemInstruction: NAME_SUGGESTION_SYSTEM_PROMPT,
-    generationConfig: {
-      responseMimeType: "application/json",
-      temperature: 1.0,
-    },
-  });
+  const models = modelChainForTier(plan.tier);
 
   try {
-    const result = await geminiCall(() => model.generateContent(ideaSummary));
+    const result = await geminiCallWithFallback(models, (modelName) => {
+      const model = client.getGenerativeModel({
+        model: modelName,
+        systemInstruction: NAME_SUGGESTION_SYSTEM_PROMPT,
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: 1.0,
+        },
+      });
+      return model.generateContent(ideaSummary);
+    });
     const rawText = result.response.text();
     const jsonStr = extractJson(rawText);
     const data = JSON.parse(jsonStr) as {

@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getGeminiClient, modelForTier, friendlyAIError, geminiCall } from "@/lib/gemini";
+import { getGeminiClient, modelChainForTier, friendlyAIError, geminiCallWithFallback } from "@/lib/gemini";
 import { ANALYSIS_SYSTEM_PROMPT } from "@/lib/prompts";
 import { consumeUsage, refundUsage } from "@/lib/billing/usage";
 import { AnalyzeBodySchema, parseBody } from "@/lib/validation";
@@ -274,17 +274,20 @@ export async function POST(request: NextRequest) {
 
   const userPrompt = `# Idea summary\n${ideaSummary}\n\n# Interview transcript\n${transcript}\n\n# Competitors found on the web\n${competitorBlock}${founderBlock ? `\n\n${founderBlock}` : ""}\n\n# Startup failure database (use for graveyard section — match by problem space, business model, or target user)\n${failureDb}\n\nReturn ONLY the JSON described in your instructions.`;
 
-  const model = client.getGenerativeModel({
-    model: modelForTier(plan.tier),
-    systemInstruction: ANALYSIS_SYSTEM_PROMPT,
-    generationConfig: {
-      responseMimeType: "application/json",
-      temperature: 0.6,
-    },
-  });
+  const models = modelChainForTier(plan.tier);
 
   try {
-    const result = await geminiCall(() => model.generateContent(userPrompt));
+    const result = await geminiCallWithFallback(models, (modelName) => {
+      const model = client.getGenerativeModel({
+        model: modelName,
+        systemInstruction: ANALYSIS_SYSTEM_PROMPT,
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: 0.6,
+        },
+      });
+      return model.generateContent(userPrompt);
+    });
     const raw = result.response.text();
     const jsonStr = extractJson(raw);
     const parsed = JSON.parse(jsonStr) as AnalysisReport & {

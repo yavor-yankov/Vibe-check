@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getGeminiClient, modelForTier, friendlyAIError, geminiCall } from "@/lib/gemini";
+import { getGeminiClient, modelChainForTier, friendlyAIError, geminiCallWithFallback } from "@/lib/gemini";
 import { PERSONA_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { RedTeamBodySchema, parseBody } from "@/lib/validation";
@@ -63,17 +63,20 @@ export async function POST(request: NextRequest) {
 
   const userPrompt = `# Idea summary\n${ideaSummary}\n\n# Interview transcript\n${transcript || "(no transcript)"}\n\n# Competitors\n${competitorBlock}\n\nGenerate 3-5 realistic user personas who would encounter this product. Return ONLY the JSON.`;
 
-  const model = client.getGenerativeModel({
-    model: modelForTier(plan.tier),
-    systemInstruction: PERSONA_SYSTEM_PROMPT,
-    generationConfig: {
-      responseMimeType: "application/json",
-      temperature: 0.9,
-    },
-  });
+  const models = modelChainForTier(plan.tier);
 
   try {
-    const result = await geminiCall(() => model.generateContent(userPrompt));
+    const result = await geminiCallWithFallback(models, (modelName) => {
+      const model = client.getGenerativeModel({
+        model: modelName,
+        systemInstruction: PERSONA_SYSTEM_PROMPT,
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: 0.9,
+        },
+      });
+      return model.generateContent(userPrompt);
+    });
     const rawText = result.response.text();
     const jsonStr = extractJson(rawText);
     const data = JSON.parse(jsonStr) as { personas?: Persona[] };

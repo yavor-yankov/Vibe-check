@@ -29,6 +29,30 @@ export function modelForTier(tier: SubscriptionTier): string {
 }
 
 /**
+ * Return an ordered list of models to try for a given tier.
+ * On 429, geminiCall will fall through to the next model in the chain.
+ * Each model has its own rate limit bucket, so switching models
+ * effectively bypasses the exhausted quota.
+ */
+export function modelChainForTier(tier: SubscriptionTier): string[] {
+  if (process.env.GEMINI_MODEL) return [process.env.GEMINI_MODEL];
+
+  const primary = getTier(tier).geminiModel;
+
+  // Build a fallback chain — deduplicated, primary first
+  const chain: string[] = [primary];
+  const fallbacks =
+    tier === "free"
+      ? ["gemini-2.0-flash-lite", "gemini-2.0-flash"]
+      : ["gemini-2.5-flash-lite", "gemini-2.0-flash"];
+
+  for (const m of fallbacks) {
+    if (!chain.includes(m)) chain.push(m);
+  }
+  return chain;
+}
+
+/**
  * Return a user-friendly message for Gemini / AI errors.
  * Keeps technical details out of production responses.
  */
@@ -57,7 +81,7 @@ export function friendlyAIError(err: unknown): string {
 // Retry with exponential backoff
 // ---------------------------------------------------------------------------
 
-function isRetryable(err: unknown): boolean {
+function isRateLimited(err: unknown): boolean {
   const msg =
     (err instanceof Error ? err.message : String(err)).toLowerCase();
   return (
@@ -78,8 +102,8 @@ function isRetryable(err: unknown): boolean {
  */
 export async function withRetry<T>(
   fn: () => Promise<T>,
-  maxRetries = 3,
-  baseDelayMs = 2000
+  maxRetries = 2,
+  baseDelayMs = 1500
 ): Promise<T> {
   let lastErr: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -87,8 +111,7 @@ export async function withRetry<T>(
       return await fn();
     } catch (err) {
       lastErr = err;
-      if (attempt >= maxRetries || !isRetryable(err)) throw err;
-      // Exponential backoff: 2s, 4s, 8s + jitter
+      if (attempt >= maxRetries || !isRateLimited(err)) throw err;
       const delay = baseDelayMs * 2 ** attempt + Math.random() * 1000;
       await new Promise((r) => setTimeout(r, delay));
     }
@@ -125,12 +148,42 @@ function releaseSlot(): void {
 /**
  * Run a Gemini call through the global queue + retry pipeline.
  * At most CONCURRENCY (default 2) calls run in parallel; the rest
- * wait. Each call retries up to 3 times on transient 429/503 errors.
+ * wait. Each call retries up to 2 times on transient 429/503 errors.
  */
 export async function geminiCall<T>(fn: () => Promise<T>): Promise<T> {
   await acquireSlot();
   try {
     return await withRetry(fn);
+  } finally {
+    releaseSlot();
+  }
+}
+
+/**
+ * Try a Gemini call with automatic model fallback on 429.
+ * Accepts a factory that receives a model name and returns the promise.
+ * Walks through the model chain for the tier — each model has its own
+ * rate limit bucket, so switching models bypasses exhausted quotas.
+ */
+export async function geminiCallWithFallback<T>(
+  models: string[],
+  fn: (modelName: string) => Promise<T>
+): Promise<T> {
+  await acquireSlot();
+  try {
+    let lastErr: unknown;
+    for (let i = 0; i < models.length; i++) {
+      try {
+        return await withRetry(() => fn(models[i]));
+      } catch (err) {
+        lastErr = err;
+        // Only fall through to next model on rate limit errors
+        if (!isRateLimited(err) || i >= models.length - 1) throw err;
+        // Small pause before trying next model
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
+    throw lastErr;
   } finally {
     releaseSlot();
   }

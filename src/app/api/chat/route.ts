@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getGeminiClient, modelForTier, friendlyAIError, geminiCall } from "@/lib/gemini";
+import { getGeminiClient, modelChainForTier, friendlyAIError, geminiCallWithFallback } from "@/lib/gemini";
 import { INTERVIEW_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { ChatBodySchema, parseBody } from "@/lib/validation";
@@ -52,11 +52,6 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const model = client.getGenerativeModel({
-    model: modelForTier(plan.tier),
-    systemInstruction: INTERVIEW_SYSTEM_PROMPT,
-  });
-
   // Gemini expects history with user/model roles. First turn is the user's seed idea.
   const history = messages.slice(0, -1).map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
@@ -70,9 +65,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const models = modelChainForTier(plan.tier);
+
   try {
-    const chat = model.startChat({ history });
-    const result = await geminiCall(() => chat.sendMessageStream(last.content));
+    // geminiCallWithFallback handles queue + retry + model fallback.
+    // On 429 from the primary model, it tries the next model in the chain.
+    const result = await geminiCallWithFallback(models, (modelName) => {
+      const model = client.getGenerativeModel({
+        model: modelName,
+        systemInstruction: INTERVIEW_SYSTEM_PROMPT,
+      });
+      const chat = model.startChat({ history });
+      return chat.sendMessageStream(last.content);
+    });
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
