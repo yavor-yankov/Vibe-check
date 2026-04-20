@@ -46,10 +46,19 @@ export const ChatBodySchema = z.object({
   messages: MessagesSchema,
 });
 
+export const FounderProfileSchema = z.object({
+  domainExpertise: z.enum(["none", "some", "deep"]),
+  technicalAbility: z.enum(["non-technical", "can-code", "senior-engineer"]),
+  runway: z.enum(["side-project", "3-months", "6-months-plus"]),
+  timeCommitment: z.enum(["nights-weekends", "part-time", "full-time"]),
+  priorExperience: z.enum(["first-time", "one-prior", "serial"]),
+}).optional();
+
 export const AnalyzeBodySchema = z.object({
   messages: MessagesSchema.optional().default([]),
   ideaSummary: IdeaSummarySchema,
   competitors: z.array(CompetitorSchema).max(20).optional().default([]),
+  founderProfile: FounderProfileSchema,
 });
 
 export const SearchBodySchema = z.object({

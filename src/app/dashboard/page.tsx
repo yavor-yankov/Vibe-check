@@ -13,6 +13,7 @@ import Sidebar from "@/components/Sidebar";
 import type {
   AnalysisReport,
   ChatMessage,
+  FounderProfile,
   Persona,
   RedTeamReport,
   Session,
@@ -213,7 +214,7 @@ export default function Home() {
     queue.set(id, next);
   };
 
-  const startInterview = async (seed: string) => {
+  const startInterview = async (seed: string, founderProfile?: FounderProfile) => {
     if (!current) return;
     setError(null);
     const userMsg = buildUserMessage(seed);
@@ -222,6 +223,7 @@ export default function Home() {
       title: seed.slice(0, 60),
       stage: "interview",
       messages: [userMsg],
+      founderProfile,
     };
     persist(next);
     await streamAssistantReply(next);
@@ -360,6 +362,7 @@ export default function Home() {
           messages: scanning.messages,
           ideaSummary,
           competitors,
+          founderProfile: scanning.founderProfile,
         }),
         signal: abort.signal,
       });
