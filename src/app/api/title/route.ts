@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { getGeminiClient } from "@/lib/gemini";
+import { getTitlePromptSuffix } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/rate-limit";
 import { z } from "zod";
@@ -9,6 +10,7 @@ export const runtime = "nodejs";
 const BodySchema = z.object({
   /** The user's opening message / seed idea (first turn of the interview). */
   seed: z.string().min(1).max(2000),
+  locale: z.enum(["en", "bg"]).optional().default("en"),
 });
 
 /**
@@ -36,7 +38,7 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
-  const { seed } = parsed.data;
+  const { seed, locale } = parsed.data;
 
   const plan = await getPlanSnapshot();
   if (!plan) {
@@ -64,7 +66,7 @@ export async function POST(request: NextRequest) {
     generationConfig: { temperature: 0.4, maxOutputTokens: 30 },
   });
 
-  const prompt = `Create a short title (3–7 words, plain text, no quotes, no punctuation at the end) that captures the core idea from this startup pitch. Return ONLY the title, nothing else.
+  const prompt = `Create a short title (3–7 words, plain text, no quotes, no punctuation at the end) that captures the core idea from this startup pitch. Return ONLY the title, nothing else.${getTitlePromptSuffix(locale)}
 
 Startup pitch: """${seed.slice(0, 500)}"""`;
 

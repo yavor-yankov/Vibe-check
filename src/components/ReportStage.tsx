@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AnalysisReport, Competitor, NameSuggestion, Persona, RedTeamReport } from "@/lib/types";
+import { useTranslation } from "@/lib/i18n/useTranslation";
 import InsightsPanel from "./InsightsPanel";
 
 interface ReportStageProps {
@@ -48,24 +49,24 @@ interface ReportStageProps {
 
 const VERDICT_STYLES: Record<
   AnalysisReport["verdict"],
-  { bg: string; text: string; label: string }
+  { bg: string; text: string; labelKey: string }
 > = {
   build_it: {
     bg: "bg-[color:var(--good)]",
     text: "text-white",
-    label: "Build it",
+    labelKey: "report.verdictBuildIt",
   },
   iterate: {
     bg: "bg-[color:var(--warn)]",
     text: "text-white",
-    label: "Iterate",
+    labelKey: "report.verdictIterate",
   },
   rethink: {
     bg: "bg-[color:var(--bad)]",
     text: "text-white",
-    label: "Rethink",
+    labelKey: "report.verdictRethink",
   },
-  skip: { bg: "bg-[color:var(--bad)]", text: "text-white", label: "Skip" },
+  skip: { bg: "bg-[color:var(--bad)]", text: "text-white", labelKey: "report.verdictSkip" },
 };
 
 function scoreColor(n: number): string {
@@ -171,9 +172,11 @@ function wordDiff(original: string, revised: string): DiffChunk[] {
 function WordDiff({
   original,
   revised,
+  diffLabel,
 }: {
   original: string;
   revised: string;
+  diffLabel: string;
 }) {
   if (!original || !revised || original.trim() === revised.trim()) return null;
 
@@ -184,7 +187,7 @@ function WordDiff({
   return (
     <div className="rounded-lg border border-[color:var(--border)] bg-[color:var(--background)] px-3 py-2.5 text-sm leading-relaxed">
       <div className="text-xs text-[color:var(--muted)] mb-2 font-medium uppercase tracking-wider">
-        Changes preview
+        {diffLabel}
       </div>
       <p className="text-[color:var(--foreground)] whitespace-pre-wrap break-words">
         {chunks.map((chunk, i) => {
@@ -236,7 +239,9 @@ export default function ReportStage({
   onPersonas,
   onNames,
 }: ReportStageProps) {
-  const verdict = VERDICT_STYLES[report.verdict] ?? VERDICT_STYLES.iterate;
+  const { t } = useTranslation();
+  const verdictStyle = VERDICT_STYLES[report.verdict] ?? VERDICT_STYLES.iterate;
+  const verdictLabel = t(verdictStyle.labelKey as any);
   const [refineOpen, setRefineOpen] = useState(false);
   const [refineDraft, setRefineDraft] = useState(ideaSummary);
   const [redTeamOpen, setRedTeamOpen] = useState(false);
@@ -293,7 +298,7 @@ export default function ReportStage({
     const lines: string[] = [];
     lines.push(`# Vibe Check Report: ${report.verdictLabel}\n`);
     lines.push(`> ${report.summary}\n`);
-    lines.push(`**Verdict:** ${verdict.label}\n`);
+    lines.push(`**Verdict:** ${verdictLabel}\n`);
 
     lines.push(`## Scores\n`);
     lines.push(`| Dimension | Score |`);
@@ -415,7 +420,7 @@ export default function ReportStage({
       <div ref={reportTopRef} className="flex items-start justify-between gap-4">
         <div>
           <div className="text-xs text-[color:var(--accent)] font-medium mb-2">
-            Vibe check report
+            {t("report.header")}
           </div>
           <h1 className="text-3xl font-semibold tracking-tight mb-2">
             {report.verdictLabel}
@@ -426,10 +431,9 @@ export default function ReportStage({
 
       {refineOpen && (
         <section className="rounded-xl border border-[color:var(--accent)]/40 bg-[color:var(--accent)]/5 p-5 space-y-3">
-          <div className="text-sm font-medium">Tweak the pitch and re-run</div>
+          <div className="text-sm font-medium">{t("report.refineHeading")}</div>
           <div className="text-xs text-[color:var(--muted)]">
-            Edit the idea summary below. I&apos;ll re-search competitors and
-            re-score in place — your interview history stays put.
+            {t("report.refineDescription")}
           </div>
           <textarea
             value={refineDraft}
@@ -438,13 +442,13 @@ export default function ReportStage({
             className="w-full resize-y rounded-lg border border-[color:var(--border)] bg-[color:var(--background)] px-3 py-2 text-sm focus:outline-none focus:border-[color:var(--accent)] focus:ring-2 focus:ring-[color:var(--accent)]/20"
           />
           {/* Live diff preview — shows what changed vs. the original pitch */}
-          <WordDiff original={ideaSummary} revised={refineDraft} />
+          <WordDiff original={ideaSummary} revised={refineDraft} diffLabel={t("report.diffPreviewLabel")} />
           <div className="flex items-center justify-end gap-2">
             <button
               onClick={() => setRefineOpen(false)}
               className="rounded-lg px-3 py-1.5 text-sm text-[color:var(--muted)] hover:text-[color:var(--foreground)] transition"
             >
-              Cancel
+              {t("report.refineCancel")}
             </button>
             <button
               onClick={submitRefine}
@@ -455,32 +459,32 @@ export default function ReportStage({
               className="inline-flex items-center gap-2 rounded-lg bg-[color:var(--accent)] text-white px-4 py-1.5 text-sm font-medium hover:brightness-110 transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Sparkles size={14} />
-              Re-score
+              {t("report.refineSubmit")}
             </button>
           </div>
         </section>
       )}
 
       <div
-        className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium ${verdict.bg} ${verdict.text}`}
+        className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium ${verdictStyle.bg} ${verdictStyle.text}`}
       >
         <Sparkles size={14} />
-        Verdict: {verdict.label}
+        {t("report.verdictPrefix", { verdict: verdictLabel })}
       </div>
 
       <section className="rounded-xl border border-[color:var(--border)] bg-[color:var(--card)] p-6">
         <div className="flex items-center gap-2 mb-4">
           <Target size={18} className="text-[color:var(--accent)]" />
-          <h2 className="text-lg font-semibold">Scores</h2>
+          <h2 className="text-lg font-semibold">{t("report.scoresHeading")}</h2>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <ScoreRing value={report.scores.overall} label="Overall" />
-          <ScoreRing value={report.scores.viability} label="Viability" />
-          <ScoreRing value={report.scores.problem} label="Problem" />
-          <ScoreRing value={report.scores.niche} label="Niche" />
+          <ScoreRing value={report.scores.overall} label={t("report.scoreOverall")} />
+          <ScoreRing value={report.scores.viability} label={t("report.scoreViability")} />
+          <ScoreRing value={report.scores.problem} label={t("report.scoreProblem")} />
+          <ScoreRing value={report.scores.niche} label={t("report.scoreNiche")} />
           <ScoreRing
             value={report.scores.differentiation}
-            label="Differentiation"
+            label={t("report.scoreDifferentiation")}
           />
         </div>
       </section>
@@ -489,7 +493,7 @@ export default function ReportStage({
         <section className="rounded-xl border border-[color:var(--border)] bg-[color:var(--card)] p-6">
           <div className="flex items-center gap-2 mb-3">
             <CheckCircle2 size={18} className="text-[color:var(--good)]" />
-            <h2 className="text-lg font-semibold">Strengths</h2>
+            <h2 className="text-lg font-semibold">{t("report.strengthsHeading")}</h2>
           </div>
           <ul className="space-y-2 text-sm">
             {report.strengths.map((s, i) => (
@@ -504,7 +508,7 @@ export default function ReportStage({
         <section className="rounded-xl border border-[color:var(--border)] bg-[color:var(--card)] p-6">
           <div className="flex items-center gap-2 mb-3">
             <AlertTriangle size={18} className="text-[color:var(--warn)]" />
-            <h2 className="text-lg font-semibold">Risks</h2>
+            <h2 className="text-lg font-semibold">{t("report.risksHeading")}</h2>
           </div>
           <ul className="space-y-2 text-sm">
             {report.risks.map((r, i) => (
@@ -521,7 +525,7 @@ export default function ReportStage({
         <section className="rounded-xl border border-[color:var(--border)] bg-[color:var(--card)] p-6">
           <div className="flex items-center gap-2 mb-3">
             <Sparkles size={18} className="text-[color:var(--accent)]" />
-            <h2 className="text-lg font-semibold">Unique angles to pursue</h2>
+            <h2 className="text-lg font-semibold">{t("report.uniqueAnglesHeading")}</h2>
           </div>
           <ul className="space-y-2 text-sm">
             {report.uniqueAngles.map((a, i) => (
@@ -540,7 +544,7 @@ export default function ReportStage({
         <div className="flex items-center gap-2 mb-4">
           <Globe size={18} className="text-[color:var(--accent)]" />
           <h2 className="text-lg font-semibold">
-            Existing apps found on the web{" "}
+            {t("report.competitorsHeading")}{" "}
             <span className="text-[color:var(--muted)] font-normal text-sm">
               ({competitors.length})
             </span>
@@ -548,8 +552,7 @@ export default function ReportStage({
         </div>
         {competitors.length === 0 ? (
           <p className="text-sm text-[color:var(--muted)]">
-            No direct competitors surfaced. That could mean a real white space —
-            or that the category is hard to search for.
+            {t("report.competitorsNone")}
           </p>
         ) : (
           <ul className="space-y-3">
@@ -582,18 +585,18 @@ export default function ReportStage({
       <section className="rounded-xl border border-[color:var(--border)] bg-[color:var(--card)] p-6">
         <div className="flex items-center gap-2 mb-4">
           <Layers size={18} className="text-[color:var(--accent)]" />
-          <h2 className="text-lg font-semibold">Suggested tech stack</h2>
+          <h2 className="text-lg font-semibold">{t("report.techStackHeading")}</h2>
         </div>
         <div className="grid md:grid-cols-2 gap-4 text-sm">
-          <StackRow label="Frontend" items={report.techStack.frontend} />
-          <StackRow label="Backend" items={report.techStack.backend} />
-          <StackRow label="Database" items={report.techStack.database} />
+          <StackRow label={t("report.techFrontend")} items={report.techStack.frontend} />
+          <StackRow label={t("report.techBackend")} items={report.techStack.backend} />
+          <StackRow label={t("report.techDatabase")} items={report.techStack.database} />
           {report.techStack.ai_ml && report.techStack.ai_ml.length > 0 && (
-            <StackRow label="AI / ML" items={report.techStack.ai_ml} />
+            <StackRow label={t("report.techAiMl")} items={report.techStack.ai_ml} />
           )}
-          <StackRow label="Infra" items={report.techStack.infra} />
+          <StackRow label={t("report.techInfra")} items={report.techStack.infra} />
           <StackRow
-            label="Key libraries"
+            label={t("report.techKeyLibraries")}
             items={report.techStack.keyLibraries}
           />
         </div>
@@ -602,7 +605,7 @@ export default function ReportStage({
       <section className="rounded-xl border border-[color:var(--border)] bg-[color:var(--card)] p-6">
         <div className="flex items-center gap-2 mb-4">
           <Map size={18} className="text-[color:var(--accent)]" />
-          <h2 className="text-lg font-semibold">Build roadmap</h2>
+          <h2 className="text-lg font-semibold">{t("report.roadmapHeading")}</h2>
         </div>
         <ol className="space-y-3">
           {report.roadmap.map((step, i) => (
@@ -627,9 +630,9 @@ export default function ReportStage({
       </section>
 
       <section className="rounded-xl border border-[color:var(--border)] bg-[color:var(--card)] p-6">
-        <h2 className="text-lg font-semibold mb-3">MVP scope</h2>
+        <h2 className="text-lg font-semibold mb-3">{t("report.mvpHeading")}</h2>
         <p className="text-xs text-[color:var(--muted)] mb-3">
-          Build only these for v1. Add nothing else until real users ask for it.
+          {t("report.mvpDescription")}
         </p>
         <ul className="space-y-2 text-sm">
           {report.mvpScope.map((m, i) => (
@@ -649,9 +652,9 @@ export default function ReportStage({
         >
           <div className="flex items-center gap-2">
             <Flame size={18} className="text-[color:var(--bad)]" />
-            <h2 className="text-lg font-semibold">Devil&apos;s advocate</h2>
+            <h2 className="text-lg font-semibold">{t("report.devilsAdvocateHeading")}</h2>
             <span className="text-xs text-[color:var(--muted)] font-normal">
-              — the reasons not to build this
+              {t("report.devilsAdvocateSubtitle")}
             </span>
           </div>
           {redTeamOpen ? (
@@ -701,7 +704,7 @@ export default function ReportStage({
               <>
                 <div className="rounded-lg border border-[color:var(--bad)]/30 bg-[color:var(--background)] p-4">
                   <div className="text-xs uppercase tracking-wider text-[color:var(--bad)] font-medium mb-1">
-                    Verdict
+                    {t("report.redTeamVerdictLabel")}
                   </div>
                   <div className="text-sm font-medium">
                     {redTeamReport.verdict}
@@ -709,7 +712,7 @@ export default function ReportStage({
                 </div>
                 <div>
                   <div className="text-xs uppercase tracking-wider text-[color:var(--muted)] font-medium mb-2">
-                    Reasons not to build
+                    {t("report.redTeamReasonsLabel")}
                   </div>
                   <ul className="space-y-2 text-sm">
                     {redTeamReport.reasons.map((r, i) => (
@@ -722,7 +725,7 @@ export default function ReportStage({
                 </div>
                 <div>
                   <div className="text-xs uppercase tracking-wider text-[color:var(--muted)] font-medium mb-2">
-                    Silent killers
+                    {t("report.redTeamSilentKillersLabel")}
                   </div>
                   <ul className="space-y-2 text-sm">
                     {redTeamReport.silentKillers.map((s, i) => (
@@ -753,9 +756,9 @@ export default function ReportStage({
         >
           <div className="flex items-center gap-2">
             <Users size={18} className="text-[color:var(--accent)]" />
-            <h2 className="text-lg font-semibold">Customer personas</h2>
+            <h2 className="text-lg font-semibold">{t("report.personasHeading")}</h2>
             <span className="text-xs text-[color:var(--muted)] font-normal">
-              — simulated user reactions
+              {t("report.personasSubtitle")}
             </span>
           </div>
           {personasOpen ? (
@@ -805,11 +808,11 @@ export default function ReportStage({
                     </blockquote>
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div>
-                        <span className="font-medium text-[color:var(--good)]">Willingness to pay:</span>{" "}
+                        <span className="font-medium text-[color:var(--good)]">{t("report.personaWillingnessToPay")}</span>{" "}
                         <span className="text-[color:var(--muted)]">{p.willingnessToPay}</span>
                       </div>
                       <div>
-                        <span className="font-medium text-[color:var(--bad)]">Objection:</span>{" "}
+                        <span className="font-medium text-[color:var(--bad)]">{t("report.personaObjection")}</span>{" "}
                         <span className="text-[color:var(--muted)]">{p.objection}</span>
                       </div>
                     </div>
@@ -833,9 +836,9 @@ export default function ReportStage({
         >
           <div className="flex items-center gap-2">
             <AtSign size={18} className="text-[color:var(--accent)]" />
-            <h2 className="text-lg font-semibold">Name ideas</h2>
+            <h2 className="text-lg font-semibold">{t("report.namesHeading")}</h2>
             <span className="text-xs text-[color:var(--muted)] font-normal">
-              — brand names + domain check
+              {t("report.namesSubtitle")}
             </span>
           </div>
           {namesOpen ? (
@@ -870,13 +873,13 @@ export default function ReportStage({
                     <div className="text-xs text-[color:var(--muted)] flex-1 truncate italic">{n.tagline}</div>
                     <div className="shrink-0">
                       {n.available === true && (
-                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[color:var(--good)]/10 text-[color:var(--good)]">Available</span>
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[color:var(--good)]/10 text-[color:var(--good)]">{t("report.nameDomainAvailable")}</span>
                       )}
                       {n.available === false && (
-                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[color:var(--bad)]/10 text-[color:var(--bad)]">Taken</span>
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[color:var(--bad)]/10 text-[color:var(--bad)]">{t("report.nameDomainTaken")}</span>
                       )}
                       {n.available === null && (
-                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[color:var(--border)] text-[color:var(--muted)]">Unknown</span>
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[color:var(--border)] text-[color:var(--muted)]">{t("report.nameDomainUnknown")}</span>
                       )}
                     </div>
                   </div>
@@ -888,7 +891,7 @@ export default function ReportStage({
       </section>
 
       <div className="text-center text-xs text-[color:var(--muted)] pt-4">
-        Based on your idea: &ldquo;{ideaSummary}&rdquo;
+        {t("report.basedOnIdea", { ideaSummary })}
       </div>
 
       {/* ── Sticky floating action bar ── */}
@@ -904,7 +907,7 @@ export default function ReportStage({
                 className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-[color:var(--card)] border border-[color:var(--border)] shadow-lg px-3 py-2 text-xs font-medium text-[color:var(--foreground)] hover:bg-[color:var(--background)] transition"
               >
                 <ArrowUp size={14} />
-                Top
+                {t("report.scrollTop")}
               </button>
             )}
           </div>
@@ -914,18 +917,18 @@ export default function ReportStage({
             <button
               onClick={handleExportPdf}
               className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium hover:bg-[color:var(--background)] transition"
-              title="Export as PDF"
+              title={t("report.exportPdfTooltip")}
             >
               <Download size={13} />
-              PDF
+              {t("report.exportPdf")}
             </button>
             <button
               onClick={handleExportMarkdown}
               className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium hover:bg-[color:var(--background)] transition"
-              title="Export as Markdown"
+              title={t("report.exportMdTooltip")}
             >
               <FileText size={13} />
-              MD
+              {t("report.exportMd")}
             </button>
             <button
               onClick={handleEmailReport}
@@ -940,10 +943,10 @@ export default function ReportStage({
                       ? "bg-[color:var(--bad)]/10 text-[color:var(--bad)]"
                       : "hover:bg-[color:var(--background)]",
               ].join(" ")}
-              title="Email report to yourself"
+              title={t("report.emailTooltip")}
             >
               <Mail size={13} />
-              {emailStatus === "sending" ? "Sending…" : emailStatus === "sent" ? "Sent!" : emailStatus === "error" ? "Failed" : "Email"}
+              {emailStatus === "sending" ? t("report.emailSending") : emailStatus === "sent" ? t("report.emailSent") : emailStatus === "error" ? t("report.emailFailed") : t("report.emailButton")}
             </button>
             <div className="w-px h-5 bg-[color:var(--border)]" />
             <button
@@ -953,18 +956,18 @@ export default function ReportStage({
                 scrollToTop();
               }}
               className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium hover:bg-[color:var(--background)] transition"
-              title="Refine & re-score"
+              title={t("report.refineTooltip")}
             >
               <Pencil size={13} />
-              Refine
+              {t("report.refineButton")}
             </button>
             <button
               onClick={onRestart}
               className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium hover:bg-[color:var(--background)] transition"
-              title="New vibe check"
+              title={t("report.newTooltip")}
             >
               <RotateCcw size={13} />
-              New
+              {t("report.newButton")}
             </button>
           </div>
         </div>

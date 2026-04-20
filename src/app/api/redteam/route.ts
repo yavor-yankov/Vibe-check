@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { getGeminiClient, modelChainForTier, friendlyAIError, geminiCallWithFallback } from "@/lib/gemini";
-import { RED_TEAM_SYSTEM_PROMPT } from "@/lib/prompts";
+import { getRedTeamPrompt } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { RedTeamBodySchema, parseBody } from "@/lib/validation";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/rate-limit";
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
 
   const parsed = parseBody(RedTeamBodySchema, raw);
   if (!parsed.ok) return parsed.response;
-  const { ideaSummary, messages, competitors, report } = parsed.data;
+  const { ideaSummary, messages, competitors, report, locale } = parsed.data;
 
   // Red-team doesn't consume monthly quota — it's part of the same
   // vibe check that /api/analyze already charged. But we still need the
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     const result = await geminiCallWithFallback(models, (modelName) => {
       const model = client.getGenerativeModel({
         model: modelName,
-        systemInstruction: RED_TEAM_SYSTEM_PROMPT,
+        systemInstruction: getRedTeamPrompt(locale),
         generationConfig: {
           responseMimeType: "application/json",
           temperature: 0.8,

@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { getGeminiClient, modelChainForTier, friendlyAIError, geminiCallWithFallback } from "@/lib/gemini";
-import { NAME_SUGGESTION_SYSTEM_PROMPT } from "@/lib/prompts";
+import { getNameSuggestionPrompt } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { SearchBodySchema, parseBody } from "@/lib/validation";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/rate-limit";
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
   // Reuse SearchBodySchema — just needs ideaSummary
   const parsed = parseBody(SearchBodySchema, raw);
   if (!parsed.ok) return parsed.response;
-  const { ideaSummary } = parsed.data;
+  const { ideaSummary, locale } = parsed.data;
 
   const plan = await getPlanSnapshot();
   if (!plan) {
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     const result = await geminiCallWithFallback(models, (modelName) => {
       const model = client.getGenerativeModel({
         model: modelName,
-        systemInstruction: NAME_SUGGESTION_SYSTEM_PROMPT,
+        systemInstruction: getNameSuggestionPrompt(locale),
         generationConfig: {
           responseMimeType: "application/json",
           temperature: 1.0,

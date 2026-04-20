@@ -4,7 +4,10 @@ import { GitCompareArrows, Menu, Plus, Search, Sparkles, Trash2, X } from "lucid
 import Link from "next/link";
 import { useState, useMemo } from "react";
 import type { Session } from "@/lib/types";
+import { useTranslation } from "@/lib/i18n/useTranslation";
+import type { TranslationKey } from "@/lib/i18n";
 import UserBadge from "./UserBadge";
+import LanguagePicker from "./LanguagePicker";
 import UsageBadge from "./UsageBadge";
 
 interface SidebarProps {
@@ -29,13 +32,13 @@ interface SidebarProps {
 
 type VerdictFilter = "all" | "build_it" | "iterate" | "rethink" | "skip" | "in_progress";
 
-const VERDICT_LABELS: Record<VerdictFilter, string> = {
-  all: "All",
-  build_it: "Build",
-  iterate: "Iterate",
-  rethink: "Rethink",
-  skip: "Skip",
-  in_progress: "In progress",
+const VERDICT_LABEL_KEYS: Record<VerdictFilter, string> = {
+  all: "sidebar.filterAll",
+  build_it: "sidebar.filterBuild",
+  iterate: "sidebar.filterIterate",
+  rethink: "sidebar.filterRethink",
+  skip: "sidebar.filterSkip",
+  in_progress: "sidebar.filterInProgress",
 };
 
 const VERDICT_ICONS: Record<VerdictFilter, string> = {
@@ -47,15 +50,15 @@ const VERDICT_ICONS: Record<VerdictFilter, string> = {
   in_progress: "\u23F3 ",
 };
 
-function relative(ts: number): string {
+function relative(ts: number, t: (key: TranslationKey, vars?: Record<string, string | number>) => string): string {
   const diff = Date.now() - ts;
   const m = Math.floor(diff / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
+  if (m < 1) return t("sidebar.relativeJustNow");
+  if (m < 60) return t("sidebar.relativeMinutes", { m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return t("sidebar.relativeHours", { h });
   const d = Math.floor(h / 24);
-  return `${d}d ago`;
+  return t("sidebar.relativeDays", { d });
 }
 
 export default function Sidebar({
@@ -70,7 +73,17 @@ export default function Sidebar({
   onOpen,
   usageRefreshSignal,
 }: SidebarProps) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
+
+  const VERDICT_LABELS: Record<VerdictFilter, string> = useMemo(() => ({
+    all: t("sidebar.filterAll"),
+    build_it: t("sidebar.filterBuild"),
+    iterate: t("sidebar.filterIterate"),
+    rethink: t("sidebar.filterRethink"),
+    skip: t("sidebar.filterSkip"),
+    in_progress: t("sidebar.filterInProgress"),
+  }), [t]);
   const [verdictFilter, setVerdictFilter] = useState<VerdictFilter>("all");
   const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
   const compareMode = compareIds.size > 0;
@@ -162,9 +175,9 @@ export default function Sidebar({
               <Sparkles size={18} />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="font-semibold leading-tight">Vibe Check</div>
+              <div className="font-semibold leading-tight">{t("sidebar.title")}</div>
               <div className="text-xs text-[color:var(--muted)] leading-tight">
-                Pressure-test your app idea
+                {t("sidebar.subtitle")}
               </div>
             </div>
           </Link>
@@ -184,7 +197,7 @@ export default function Sidebar({
           className="mx-4 mt-4 flex items-center justify-center gap-2 rounded-lg bg-[color:var(--accent)] text-white py-2.5 px-4 text-sm font-medium hover:brightness-110 transition"
         >
           <Plus size={16} />
-          New vibe check
+          {t("sidebar.newButton")}
         </button>
 
         {/* Compare mode toggle */}
@@ -203,13 +216,13 @@ export default function Sidebar({
                   className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-[color:var(--accent)] text-white py-2 px-3 text-xs font-medium hover:brightness-110 transition disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <GitCompareArrows size={14} />
-                  Compare {compareIds.size} ideas
+                  {t("sidebar.compareAction", { count: compareIds.size })}
                 </button>
                 <button
                   onClick={() => setCompareIds(new Set())}
                   className="rounded-lg border border-[color:var(--border)] py-2 px-3 text-xs text-[color:var(--muted)] hover:text-[color:var(--foreground)] transition"
                 >
-                  Cancel
+                  {t("sidebar.compareCancel")}
                 </button>
               </>
             ) : (
@@ -218,7 +231,7 @@ export default function Sidebar({
                 className="w-full flex items-center justify-center gap-2 rounded-lg border border-[color:var(--border)] py-2 px-3 text-xs text-[color:var(--muted)] hover:text-[color:var(--foreground)] hover:border-[color:var(--accent)] transition"
               >
                 <GitCompareArrows size={13} />
-                Compare ideas
+                {t("sidebar.compareButton")}
               </button>
             )}
           </div>
@@ -236,7 +249,7 @@ export default function Sidebar({
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search sessions…"
+              placeholder={t("sidebar.searchPlaceholder")}
               className="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-[color:var(--border)] bg-[color:var(--background)] text-[color:var(--foreground)] placeholder:text-[color:var(--muted)] focus:outline-none focus:border-[color:var(--accent)] focus:ring-1 focus:ring-[color:var(--accent)]/30"
             />
             {query && (
@@ -284,11 +297,11 @@ export default function Sidebar({
         <div className="flex-1 overflow-y-auto px-2 pb-4">
           {sessions.length === 0 ? (
             <div className="px-3 py-6 text-sm text-[color:var(--muted)] text-center">
-              No sessions yet. Start your first vibe check above.
+              {t("sidebar.noSessions")}
             </div>
           ) : visible.length === 0 ? (
             <div className="px-3 py-6 text-sm text-[color:var(--muted)] text-center">
-              No sessions match
+              {t("sidebar.noMatch")}
               {query ? ` "${query}"` : ""}{verdictFilter !== "all" ? ` with verdict "${VERDICT_LABELS[verdictFilter]}"` : ""}.
             </div>
           ) : (
@@ -327,10 +340,10 @@ export default function Sidebar({
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">
-                        {s.title || "Untitled"}
+                        {s.title || t("sidebar.untitled")}
                       </div>
                       <div className="text-xs text-[color:var(--muted)] flex items-center gap-2">
-                        <span>{relative(s.updatedAt)}</span>
+                        <span>{relative(s.updatedAt, t)}</span>
                         {s.report ? (
                           <span className="inline-flex items-center gap-1">
                             · <b>{s.report.scores.overall}/10</b>
@@ -345,7 +358,7 @@ export default function Sidebar({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (confirm("Delete this session?")) onDelete(s.id);
+                        if (confirm(t("sidebar.deleteConfirm"))) onDelete(s.id);
                       }}
                       className="opacity-0 group-hover:opacity-100 text-[color:var(--muted)] hover:text-[color:var(--bad)] transition"
                       aria-label="Delete session"
@@ -363,10 +376,11 @@ export default function Sidebar({
           className="p-3 border-t border-[color:var(--border)]"
           refreshSignal={usageRefreshSignal}
         />
+        <LanguagePicker className="px-3 py-2 border-t border-[color:var(--border)]" />
         <UserBadge className="p-3 border-t border-[color:var(--border)]" />
 
         <div className="px-4 py-3 border-t border-[color:var(--border)] text-[11px] text-[color:var(--muted)] leading-tight">
-          Powered by Gemini &amp; Tavily.
+          {t("sidebar.poweredBy")}
         </div>
       </aside>
 

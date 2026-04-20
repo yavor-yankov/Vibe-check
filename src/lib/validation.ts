@@ -9,6 +9,9 @@
 
 import { z } from "zod";
 
+/** Locale enum shared across request bodies. */
+export const LocaleSchema = z.enum(["en", "bg"]).optional().default("en");
+
 /** Single chat message — mirrors the ChatMessage type from @/lib/types. */
 export const ChatMessageSchema = z.object({
   id: z.string().max(128),
@@ -44,6 +47,7 @@ export const IdeaSummarySchema = z
 
 export const ChatBodySchema = z.object({
   messages: MessagesSchema,
+  locale: LocaleSchema,
 });
 
 export const FounderProfileSchema = z.object({
@@ -59,10 +63,12 @@ export const AnalyzeBodySchema = z.object({
   ideaSummary: IdeaSummarySchema,
   competitors: z.array(CompetitorSchema).max(20).optional().default([]),
   founderProfile: FounderProfileSchema,
+  locale: LocaleSchema,
 });
 
 export const SearchBodySchema = z.object({
   ideaSummary: IdeaSummarySchema,
+  locale: LocaleSchema,
 });
 
 export const RedTeamBodySchema = z.object({
@@ -80,6 +86,7 @@ export const RedTeamBodySchema = z.object({
     })
     .nullable()
     .optional(),
+  locale: LocaleSchema,
 });
 
 // ---------------------------------------------------------------------------

@@ -3,6 +3,7 @@
 import { ChevronDown, Send, Sparkles, User, Wand2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "@/lib/types";
+import { useTranslation } from "@/lib/i18n/useTranslation";
 
 interface InterviewStageProps {
   messages: ChatMessage[];
@@ -55,6 +56,7 @@ export default function InterviewStage({
   error,
   onDismissError,
 }: InterviewStageProps) {
+  const { t } = useTranslation();
   const [draft, setDraft] = useState("");
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -141,9 +143,9 @@ export default function InterviewStage({
     !readySummary && !isStreaming && userTurnCount >= ESCAPE_HATCH_MIN_TURNS;
 
   function submit() {
-    const t = draft.trim();
-    if (!t || isStreaming) return;
-    onSend(t);
+    const text = draft.trim();
+    if (!text || isStreaming) return;
+    onSend(text);
     setDraft("");
     // Optimistically snap to bottom when the user sends a message.
     setTimeout(() => scrollToBottom("smooth"), 50);
@@ -155,10 +157,10 @@ export default function InterviewStage({
       <div className="shrink-0 border-b border-[color:var(--border)] bg-[color:var(--card)] px-6 py-3">
         <div className="max-w-4xl mx-auto">
           <div className="text-xs text-[color:var(--accent)] font-medium">
-            Step 2 of 3 — Interview
+            {t("interview.stepLabel")}
           </div>
           <div className="text-sm text-[color:var(--muted)]">
-            Answer a few questions so I can evaluate the idea properly.
+            {t("interview.stepDescription")}
           </div>
         </div>
       </div>
@@ -193,7 +195,7 @@ export default function InterviewStage({
                   {unreadCount}
                 </span>
               ) : (
-                "Latest"
+                t("interview.scrollLatest")
               )}
             </button>
           </div>
@@ -211,7 +213,7 @@ export default function InterviewStage({
                 onClick={onDismissError}
                 className="shrink-0 text-xs font-medium opacity-70 hover:opacity-100 transition"
               >
-                Dismiss
+                {t("interview.dismiss")}
               </button>
             )}
           </div>
@@ -223,9 +225,9 @@ export default function InterviewStage({
         <div className="shrink-0 border-t border-[color:var(--border)] bg-[color:var(--accent)]/5 px-6 py-4">
           <div className="max-w-4xl mx-auto flex items-center gap-4">
             <div className="flex-1">
-              <div className="text-sm font-medium">Got it — ready to analyze.</div>
+              <div className="text-sm font-medium">{t("interview.readyHeading")}</div>
               <div className="text-xs text-[color:var(--muted)]">
-                I&apos;ll search the web for similar apps, then score your idea.
+                {t("interview.readyDescription")}
               </div>
             </div>
             <button
@@ -234,7 +236,7 @@ export default function InterviewStage({
               className="inline-flex items-center gap-2 rounded-xl bg-[color:var(--accent)] text-white px-5 py-2.5 font-medium hover:brightness-110 transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Sparkles size={16} />
-              Analyze idea
+              {t("interview.analyzeButton")}
             </button>
           </div>
         </div>
@@ -252,7 +254,7 @@ export default function InterviewStage({
                     submit();
                   }
                 }}
-                placeholder="Type your answer…"
+                placeholder={t("interview.placeholder")}
                 rows={1}
                 className="flex-1 resize-none bg-transparent px-3 py-2.5 text-sm leading-relaxed max-h-40 focus:outline-none placeholder:text-[color:var(--muted)]"
                 disabled={isStreaming}
@@ -275,10 +277,10 @@ export default function InterviewStage({
                   }}
                   disabled={isStreaming}
                   className="inline-flex items-center gap-1.5 text-xs text-[color:var(--muted)] hover:text-[color:var(--accent)] transition disabled:opacity-40 disabled:cursor-not-allowed"
-                  title="Skip remaining questions and analyze now"
+                  title={t("interview.escapeHatchTooltip")}
                 >
                   <Wand2 size={12} />
-                  I&apos;m done — analyze now
+                  {t("interview.escapeHatch")}
                 </button>
               </div>
             )}
@@ -320,6 +322,7 @@ function Message({ message }: { message: ChatMessage }) {
 }
 
 function ThinkingBubble() {
+  const { t } = useTranslation();
   return (
     <div className="flex gap-3 fade-in-up">
       <div className="w-9 h-9 rounded-full shrink-0 flex items-center justify-center bg-[color:var(--accent)] text-white">
@@ -332,7 +335,7 @@ function ThinkingBubble() {
             <span className="typing-dot w-2 h-2 rounded-full bg-[color:var(--accent)]/60" />
             <span className="typing-dot w-2 h-2 rounded-full bg-[color:var(--accent)]/60" />
           </div>
-          <span className="text-xs text-[color:var(--muted)] ml-1">Thinking…</span>
+          <span className="text-xs text-[color:var(--muted)] ml-1">{t("interview.thinking")}</span>
         </div>
       </div>
     </div>

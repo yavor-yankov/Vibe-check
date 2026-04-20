@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { getGeminiClient, modelChainForTier, friendlyAIError, geminiCallWithFallback } from "@/lib/gemini";
-import { INTERVIEW_SYSTEM_PROMPT } from "@/lib/prompts";
+import { getInterviewPrompt } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { ChatBodySchema, parseBody } from "@/lib/validation";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/rate-limit";
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   const parsed = parseBody(ChatBodySchema, raw);
   if (!parsed.ok) return parsed.response;
 
-  const { messages } = parsed.data;
+  const { messages, locale } = parsed.data;
   if (messages.length === 0) {
     return new Response(
       JSON.stringify({ error: "messages array is required" }),
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     const result = await geminiCallWithFallback(models, (modelName) => {
       const model = client.getGenerativeModel({
         model: modelName,
-        systemInstruction: INTERVIEW_SYSTEM_PROMPT,
+        systemInstruction: getInterviewPrompt(locale),
       });
       const chat = model.startChat({ history });
       return chat.sendMessageStream(last.content);

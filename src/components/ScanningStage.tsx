@@ -2,6 +2,7 @@
 
 import { Globe, Search, Sparkles, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useTranslation } from "@/lib/i18n/useTranslation";
 
 interface ScanningStageProps {
   ideaSummary: string;
@@ -11,18 +12,21 @@ interface ScanningStageProps {
   onRetry?: () => void;
 }
 
-const STEPS = [
-  { icon: Search, label: "Generating search queries…" },
-  { icon: Globe, label: "Scanning the web for similar apps…" },
-  { icon: Sparkles, label: "Scoring viability and drafting your build plan…" },
-];
+const STEP_DEFS = [
+  { icon: Search, key: "scanning.step1" },
+  { icon: Globe, key: "scanning.step2" },
+  { icon: Sparkles, key: "scanning.step3" },
+] as const;
 
 export default function ScanningStage({
   ideaSummary,
   error,
   onRetry,
 }: ScanningStageProps) {
+  const { t } = useTranslation();
   const [active, setActive] = useState(0);
+
+  const STEPS = STEP_DEFS.map((s) => ({ icon: s.icon, label: t(s.key) }));
 
   // Advance the step indicator every 2.5 s — pause when there's an error.
   useEffect(() => {
@@ -36,10 +40,10 @@ export default function ScanningStage({
   return (
     <div className="max-w-2xl mx-auto px-6 py-16 fade-in-up">
       <div className="text-xs text-[color:var(--accent)] font-medium mb-3">
-        Step 3 of 3 — Analyzing
+        {t("scanning.stepLabel")}
       </div>
       <h1 className="text-3xl font-semibold tracking-tight mb-3">
-        Vibe-checking your idea…
+        {t("scanning.heading")}
       </h1>
 
       {/* Shimmer bar representing the idea being processed */}
@@ -50,7 +54,7 @@ export default function ScanningStage({
         // Error state — replace spinner with a friendly message + retry button.
         <div className="rounded-xl border border-[color:var(--bad)]/30 bg-[color:var(--bad)]/5 px-6 py-5">
           <p className="text-sm font-medium text-[color:var(--bad)] mb-1">
-            Something went wrong during the analysis.
+            {t("scanning.errorHeading")}
           </p>
           <p className="text-sm text-[color:var(--muted)] mb-4">{error}</p>
           {onRetry && (
@@ -60,7 +64,7 @@ export default function ScanningStage({
               className="inline-flex items-center gap-2 rounded-lg bg-[color:var(--accent)] text-white px-4 py-2 text-sm font-medium hover:brightness-110 transition"
             >
               <RefreshCw size={14} />
-              Try again
+              {t("scanning.retryButton")}
             </button>
           )}
         </div>

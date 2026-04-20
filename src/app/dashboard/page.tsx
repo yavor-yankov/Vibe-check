@@ -21,6 +21,7 @@ import type {
   Session,
 } from "@/lib/types";
 import { loadSessions as loadLocalSessions, newSession } from "@/lib/storage";
+import { useLocale } from "@/components/LocaleProvider";
 import {
   deleteSessionRemote,
   fetchSessions,
@@ -49,6 +50,7 @@ export default function Home() {
   // after each vibe check is consumed.
   const [usageRefreshSignal, setUsageRefreshSignal] = useState(0);
   const [compareSessionIds, setCompareSessionIds] = useState<string[] | null>(null);
+  const { locale } = useLocale();
 
   // Keep a ref to the latest active session so async callbacks don't
   // act on stale closures (e.g. runRedTeam finishing after the user
@@ -260,7 +262,7 @@ export default function Home() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: sessionWithUser.messages }),
+        body: JSON.stringify({ messages: sessionWithUser.messages, locale }),
         signal: chatAbort.signal,
       });
       if (!res.ok || !res.body) {
@@ -320,7 +322,7 @@ export default function Home() {
             const res = await fetch("/api/title", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ seed }),
+              body: JSON.stringify({ seed, locale }),
             });
             if (res.ok) {
               const { title } = (await res.json()) as { title?: string | null };
@@ -368,7 +370,7 @@ export default function Home() {
       const searchRes = await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ideaSummary }),
+        body: JSON.stringify({ ideaSummary, locale }),
         signal: abort.signal,
       });
       const searchData = (await searchRes.json()) as {
@@ -389,6 +391,7 @@ export default function Home() {
           ideaSummary,
           competitors,
           founderProfile: scanning.founderProfile,
+          locale,
         }),
         signal: abort.signal,
       });
@@ -478,6 +481,7 @@ export default function Home() {
           messages: snapshot.messages,
           competitors: snapshot.competitors,
           report: snapshot.report,
+          locale,
         }),
         signal: rtAbort.signal,
       });
@@ -541,6 +545,7 @@ export default function Home() {
           messages: snapshot.messages,
           competitors: snapshot.competitors,
           report: snapshot.report,
+          locale,
         }),
         signal: abort.signal,
       });
@@ -574,7 +579,7 @@ export default function Home() {
       const res = await fetch("/api/names", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ideaSummary: snapshot.ideaSummary ?? "" }),
+        body: JSON.stringify({ ideaSummary: snapshot.ideaSummary ?? "", locale }),
         signal: abort.signal,
       });
       const data = (await res.json()) as { names?: NameSuggestion[]; error?: string };

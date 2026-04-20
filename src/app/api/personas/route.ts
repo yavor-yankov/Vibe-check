@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { getGeminiClient, modelChainForTier, friendlyAIError, geminiCallWithFallback } from "@/lib/gemini";
-import { PERSONA_SYSTEM_PROMPT } from "@/lib/prompts";
+import { getPersonaPrompt } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { RedTeamBodySchema, parseBody } from "@/lib/validation";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/rate-limit";
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   // Reuse RedTeamBodySchema — same shape (ideaSummary + messages + competitors + report)
   const parsed = parseBody(RedTeamBodySchema, raw);
   if (!parsed.ok) return parsed.response;
-  const { ideaSummary, messages, competitors } = parsed.data;
+  const { ideaSummary, messages, competitors, locale } = parsed.data;
 
   const plan = await getPlanSnapshot();
   if (!plan) {
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     const result = await geminiCallWithFallback(models, (modelName) => {
       const model = client.getGenerativeModel({
         model: modelName,
-        systemInstruction: PERSONA_SYSTEM_PROMPT,
+        systemInstruction: getPersonaPrompt(locale),
         generationConfig: {
           responseMimeType: "application/json",
           temperature: 0.9,

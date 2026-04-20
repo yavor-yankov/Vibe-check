@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CreditCard, Zap, AlertTriangle } from "lucide-react";
+import { useTranslation } from "@/lib/i18n/useTranslation";
 
 interface UsageSnapshot {
   tier: "free" | "pro" | "lifetime";
@@ -39,6 +40,7 @@ function daysUntilReset(): number {
  * - Re-fetches when `refreshSignal` changes (i.e. after each vibe check)
  */
 export default function UsageBadge({ className, refreshSignal }: UsageBadgeProps) {
+  const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<UsageSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -131,7 +133,7 @@ export default function UsageBadge({ className, refreshSignal }: UsageBadgeProps
             ) : (
               <CreditCard size={12} className="text-[color:var(--accent)]" />
             )}
-            {snapshot.tier} plan
+            {t("usage.planLabel", { tier: snapshot.tier })}
           </div>
 
           {isFree && quota ? (
@@ -144,10 +146,10 @@ export default function UsageBadge({ className, refreshSignal }: UsageBadgeProps
                     : "text-[color:var(--muted)]"
               }`}
             >
-              {snapshot.usageCount}/{quota} used
+              {t("usage.used", { usageCount: snapshot.usageCount, quota })}
             </span>
           ) : (
-            <span className="text-[color:var(--muted)]">Unlimited</span>
+            <span className="text-[color:var(--muted)]">{t("usage.unlimited")}</span>
           )}
         </div>
 
@@ -174,12 +176,12 @@ export default function UsageBadge({ className, refreshSignal }: UsageBadgeProps
               }
             >
               {isExhausted
-                ? `Resets in ${resetDays}d`
-                : `${remaining} left · resets in ${resetDays}d`}
+                ? t("usage.exhaustedReset", { days: resetDays })
+                : t("usage.remainingWithReset", { remaining: remaining ?? 0, days: resetDays })}
             </span>
           ) : (
             <span className="text-[color:var(--muted)] text-xs">
-              Resets monthly
+              {t("usage.resetsMonthly")}
             </span>
           )}
 
@@ -188,7 +190,7 @@ export default function UsageBadge({ className, refreshSignal }: UsageBadgeProps
               href="/pricing"
               className="text-[color:var(--accent)] hover:underline font-medium shrink-0"
             >
-              {isExhausted ? "Upgrade now →" : "Upgrade →"}
+              {isExhausted ? t("usage.upgradeNow") : t("usage.upgrade")}
             </Link>
           ) : (
             <button
@@ -196,7 +198,7 @@ export default function UsageBadge({ className, refreshSignal }: UsageBadgeProps
               onClick={openPortal}
               className="text-[color:var(--accent)] hover:underline font-medium shrink-0"
             >
-              Manage →
+              {t("usage.manage")}
             </button>
           )}
         </div>

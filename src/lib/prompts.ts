@@ -175,3 +175,55 @@ Respond with ONLY valid JSON (no markdown, no code fences):
 }
 
 Generate exactly 5 suggestions. Mix styles: some playful, some professional, some abstract. Avoid generic names like "AppHelper" or "SmartTool".`;
+
+// ---------------------------------------------------------------------------
+// Locale-aware prompt getters
+// ---------------------------------------------------------------------------
+
+const BG_INTERVIEW_SUFFIX =
+  '\n\nIMPORTANT: Respond entirely in Bulgarian (Български). Keep the READY_FOR_ANALYSIS: token in English exactly as shown.';
+
+const BG_JSON_VALUES_SUFFIX =
+  '\n\nIMPORTANT: All JSON text VALUES must be written in Bulgarian (Български). JSON keys must remain in English exactly as shown in the schema.';
+
+const BG_NAME_SUFFIX =
+  '\n\nIMPORTANT: Suggest brand names that work well in both English and Bulgarian markets. Taglines should be in Bulgarian (Български). JSON keys must remain in English.';
+
+const BG_TITLE_SUFFIX =
+  '\n\nIMPORTANT: Write the title in Bulgarian (Български).';
+
+export function getInterviewPrompt(locale: string): string {
+  if (locale === "bg") return INTERVIEW_SYSTEM_PROMPT + BG_INTERVIEW_SUFFIX;
+  return INTERVIEW_SYSTEM_PROMPT;
+}
+
+export function getAnalysisPrompt(locale: string): string {
+  if (locale === "bg") return ANALYSIS_SYSTEM_PROMPT + BG_JSON_VALUES_SUFFIX;
+  return ANALYSIS_SYSTEM_PROMPT;
+}
+
+export function getRedTeamPrompt(locale: string): string {
+  if (locale === "bg") return RED_TEAM_SYSTEM_PROMPT + BG_JSON_VALUES_SUFFIX;
+  return RED_TEAM_SYSTEM_PROMPT;
+}
+
+export function getPersonaPrompt(locale: string): string {
+  if (locale === "bg") return PERSONA_SYSTEM_PROMPT + BG_JSON_VALUES_SUFFIX;
+  return PERSONA_SYSTEM_PROMPT;
+}
+
+export function getNameSuggestionPrompt(locale: string): string {
+  if (locale === "bg") return NAME_SUGGESTION_SYSTEM_PROMPT + BG_NAME_SUFFIX;
+  return NAME_SUGGESTION_SYSTEM_PROMPT;
+}
+
+export function getSearchQueryPrompt(locale: string): string {
+  // Search queries stay in English regardless of locale — Tavily works better
+  // in English. The function exists for API consistency.
+  return SEARCH_QUERY_SYSTEM_PROMPT;
+}
+
+export function getTitlePromptSuffix(locale: string): string {
+  if (locale === "bg") return BG_TITLE_SUFFIX;
+  return "";
+}

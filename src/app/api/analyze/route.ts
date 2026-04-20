@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { getGeminiClient, modelChainForTier, friendlyAIError, geminiCallWithFallback } from "@/lib/gemini";
-import { ANALYSIS_SYSTEM_PROMPT } from "@/lib/prompts";
+import { getAnalysisPrompt } from "@/lib/prompts";
 import { consumeUsage, refundUsage } from "@/lib/billing/usage";
 import { AnalyzeBodySchema, parseBody } from "@/lib/validation";
 import { getFailureDatabaseContext } from "@/lib/failure-database";
@@ -206,7 +206,7 @@ export async function POST(request: NextRequest) {
 
   const parsed = parseBody(AnalyzeBodySchema, raw);
   if (!parsed.ok) return parsed.response;
-  const { messages, ideaSummary, competitors, founderProfile } = parsed.data;
+  const { messages, ideaSummary, competitors, founderProfile, locale } = parsed.data;
 
   // Resolve the Gemini client FIRST so a missing API key never burns a
   // quota slot. Only once we know the downstream call is reachable do we
@@ -280,7 +280,7 @@ export async function POST(request: NextRequest) {
     const result = await geminiCallWithFallback(models, (modelName) => {
       const model = client.getGenerativeModel({
         model: modelName,
-        systemInstruction: ANALYSIS_SYSTEM_PROMPT,
+        systemInstruction: getAnalysisPrompt(locale),
         generationConfig: {
           responseMimeType: "application/json",
           temperature: 0.6,
