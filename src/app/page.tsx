@@ -38,7 +38,7 @@ function useInView(options?: IntersectionObserverInit) {
           }
         });
       },
-      { threshold: 0.15, ...options }
+      { threshold: 0.1, rootMargin: "0px 0px -40px 0px", ...options }
     );
 
     // Observe the container and all children with animate-on-scroll
@@ -48,7 +48,19 @@ function useInView(options?: IntersectionObserverInit) {
       observer.observe(el);
     }
 
-    return () => observer.disconnect();
+    // Safety fallback — if elements are already in view or observer
+    // fails to fire, make everything visible after a short delay
+    const fallback = setTimeout(() => {
+      animatedChildren.forEach((child) => child.classList.add("is-visible"));
+      if (el.classList.contains("animate-on-scroll")) {
+        el.classList.add("is-visible");
+      }
+    }, 3000);
+
+    return () => {
+      clearTimeout(fallback);
+      observer.disconnect();
+    };
   }, [options]);
 
   return ref;
@@ -128,14 +140,18 @@ function AnimatedCounter({ value, suffix = "" }: { value: string; suffix?: strin
 
 function FloatingParticles() {
   const particles = [
-    { size: 3, left: "10%", delay: "0s", duration: "18s", opacity: 0.3 },
-    { size: 2, left: "20%", delay: "3s", duration: "22s", opacity: 0.2 },
-    { size: 4, left: "35%", delay: "1s", duration: "16s", opacity: 0.25 },
-    { size: 2, left: "50%", delay: "5s", duration: "20s", opacity: 0.15 },
-    { size: 3, left: "65%", delay: "2s", duration: "19s", opacity: 0.2 },
-    { size: 2, left: "75%", delay: "4s", duration: "24s", opacity: 0.3 },
-    { size: 3, left: "88%", delay: "0.5s", duration: "17s", opacity: 0.2 },
-    { size: 2, left: "95%", delay: "6s", duration: "21s", opacity: 0.15 },
+    { size: 5, left: "5%",  delay: "0s",   duration: "16s", opacity: 0.5,  color: "var(--accent)" },
+    { size: 3, left: "12%", delay: "2s",   duration: "20s", opacity: 0.35, color: "var(--accent)" },
+    { size: 6, left: "22%", delay: "1s",   duration: "14s", opacity: 0.45, color: "#fb923c" },
+    { size: 4, left: "30%", delay: "4s",   duration: "18s", opacity: 0.3,  color: "var(--accent)" },
+    { size: 7, left: "40%", delay: "0.5s", duration: "15s", opacity: 0.4,  color: "#fdba74" },
+    { size: 3, left: "48%", delay: "3s",   duration: "22s", opacity: 0.35, color: "var(--accent)" },
+    { size: 5, left: "55%", delay: "5s",   duration: "17s", opacity: 0.45, color: "#fb923c" },
+    { size: 4, left: "63%", delay: "1.5s", duration: "19s", opacity: 0.3,  color: "var(--accent)" },
+    { size: 6, left: "72%", delay: "2.5s", duration: "16s", opacity: 0.5,  color: "#fdba74" },
+    { size: 3, left: "80%", delay: "4.5s", duration: "21s", opacity: 0.35, color: "var(--accent)" },
+    { size: 5, left: "87%", delay: "0.8s", duration: "15s", opacity: 0.4,  color: "#fb923c" },
+    { size: 4, left: "93%", delay: "6s",   duration: "18s", opacity: 0.3,  color: "var(--accent)" },
   ];
 
   return (
@@ -149,8 +165,9 @@ function FloatingParticles() {
             height: p.size,
             left: p.left,
             bottom: "-10px",
-            backgroundColor: "var(--accent)",
+            backgroundColor: p.color,
             opacity: p.opacity,
+            boxShadow: `0 0 ${p.size * 2}px ${p.color}`,
             animation: `particleDrift ${p.duration} linear ${p.delay} infinite`,
           }}
         />
@@ -685,7 +702,7 @@ function FAQ() {
         <div className="space-y-2">
           {faqs.map(({ q, a }, i) => (
             <details
-              key={q}
+              key={i}
               className={`group rounded-xl border border-[color:var(--border)] bg-[color:var(--background)] overflow-hidden animate-on-scroll stagger-${Math.min(i + 1, 5)} hover:border-[color:var(--accent)]/20 transition-colors duration-300`}
             >
               <summary className="flex items-center justify-between gap-4 px-5 py-4 cursor-pointer text-sm font-medium list-none select-none hover:bg-[color:var(--card)] transition">
