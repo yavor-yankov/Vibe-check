@@ -3,6 +3,7 @@ import { getGeminiClient, modelForTier } from "@/lib/gemini";
 import { ANALYSIS_SYSTEM_PROMPT } from "@/lib/prompts";
 import { consumeUsage, refundUsage } from "@/lib/billing/usage";
 import { AnalyzeBodySchema, parseBody } from "@/lib/validation";
+import { getFailureDatabaseContext } from "@/lib/failure-database";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/rate-limit";
 import { fireWebhook } from "@/lib/webhooks";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -269,7 +270,9 @@ export async function POST(request: NextRequest) {
     ? `# Founder profile\n- Domain expertise: ${founderProfile.domainExpertise}\n- Technical ability: ${founderProfile.technicalAbility}\n- Runway: ${founderProfile.runway}\n- Time commitment: ${founderProfile.timeCommitment}\n- Prior startup experience: ${founderProfile.priorExperience}\n\nTailor the tech stack complexity, timeline estimates, and build effort to this founder's profile.`
     : "";
 
-  const userPrompt = `# Idea summary\n${ideaSummary}\n\n# Interview transcript\n${transcript}\n\n# Competitors found on the web\n${competitorBlock}${founderBlock ? `\n\n${founderBlock}` : ""}\n\nReturn ONLY the JSON described in your instructions.`;
+  const failureDb = getFailureDatabaseContext();
+
+  const userPrompt = `# Idea summary\n${ideaSummary}\n\n# Interview transcript\n${transcript}\n\n# Competitors found on the web\n${competitorBlock}${founderBlock ? `\n\n${founderBlock}` : ""}\n\n# Startup failure database (use for graveyard section — match by problem space, business model, or target user)\n${failureDb}\n\nReturn ONLY the JSON described in your instructions.`;
 
   const model = client.getGenerativeModel({
     model: modelForTier(plan.tier),
