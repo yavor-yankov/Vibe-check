@@ -139,12 +139,8 @@ export default function Home() {
           /* previous write's error was already surfaced; don't chain-cancel */
         })
         .then(() => persistSession(stamped))
-        .catch((err) => {
-          setError(
-            err instanceof Error
-              ? `Save failed: ${err.message}`
-              : "Save failed"
-          );
+        .catch(() => {
+          setError("Couldn't save your progress. Please check your connection and try again.");
         })
         .finally(() => {
           // Only clear the tail if nothing newer has been chained on.
@@ -268,10 +264,7 @@ export default function Home() {
         signal: chatAbort.signal,
       });
       if (!res.ok || !res.body) {
-        const msg = await res.text().catch(() => "");
-        throw new Error(
-          `Chat API failed (${res.status}). ${msg || "Check GEMINI_API_KEY."}`
-        );
+        throw new Error("high-demand");
       }
       const assistantMsg = buildAssistantMessage("");
       let working: Session = {
@@ -294,7 +287,26 @@ export default function Home() {
         };
         setCurrent(working);
       }
-      // final persist
+      // final persist — strip any [ERROR] tag from the streamed content
+      const finalContent = acc.replace(/\n?\[ERROR\]:[\s\S]*$/, "").trim();
+      if (finalContent !== acc) {
+        // Stream ended with an error — show friendly message
+        setError("We're experiencing high traffic right now. Please try again in a moment.");
+      }
+      if (finalContent) {
+        const cleaned: ChatMessage = { ...assistantMsg, content: finalContent };
+        working = {
+          ...working,
+          messages: [...sessionWithUser.messages, cleaned],
+        };
+      } else {
+        // Empty response — remove the blank assistant message
+        working = {
+          ...working,
+          messages: sessionWithUser.messages,
+        };
+      }
+      setCurrent(working);
       persist(working);
 
       // Auto-generate a meaningful session title after the FIRST assistant
@@ -331,10 +343,9 @@ export default function Home() {
       }
     } catch (err) {
       if ((err as Error)?.name === "AbortError") {
-        setError("Chat request timed out. Please try again.");
+        setError("The request took too long. Please try again.");
       } else {
-        const msg = err instanceof Error ? err.message : "Unknown error";
-        setError(msg);
+        setError("We're experiencing high traffic right now. Please try again in a moment.");
       }
     } finally {
       clearTimeout(chatTimeout);
@@ -406,10 +417,8 @@ export default function Home() {
       clearTimeout(timeout);
       const isAbort = err instanceof DOMException && err.name === "AbortError";
       const msg = isAbort
-        ? "Analysis timed out (90 s). Please try again."
-        : err instanceof Error
-          ? err.message
-          : "Unknown error";
+        ? "The analysis took too long. Please try again."
+        : "We're experiencing high traffic right now. Please try again in a moment.";
       setError(msg);
       // revert so the user can retry from a sensible stage. If caller
       // supplied an original ideaSummary (refine path), restore it so the
@@ -615,7 +624,7 @@ export default function Home() {
           </div>
         )}
 
-        {!compareSessionIds && error && (
+        {!compareSessionIds && error && current.stage !== "interview" && (
           <div className="px-6 pt-4">
             <div className="max-w-3xl mx-auto rounded-lg border border-[color:var(--bad)]/30 bg-[color:var(--bad)]/5 px-4 py-3 text-sm text-[color:var(--bad)]">
               <b>Error:</b> {error}
