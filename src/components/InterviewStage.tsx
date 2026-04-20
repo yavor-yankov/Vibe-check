@@ -9,6 +9,8 @@ interface InterviewStageProps {
   onSend: (text: string) => void;
   onDone: (ideaSummary: string) => void;
   isStreaming: boolean;
+  error?: string | null;
+  onDismissError?: () => void;
 }
 
 // Minimum user turns before the "analyze now" escape hatch is offered.
@@ -50,11 +52,14 @@ export default function InterviewStage({
   onSend,
   onDone,
   isStreaming,
+  error,
+  onDismissError,
 }: InterviewStageProps) {
   const [draft, setDraft] = useState("");
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   // True when we should auto-scroll (user is at/near the bottom)
   const atBottomRef = useRef(true);
   const prevMessageCountRef = useRef(messages.length);
@@ -109,6 +114,14 @@ export default function InterviewStage({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Auto-resize textarea as user types
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 160) + "px";
+  }, [draft]);
+
   function handleScroll() {
     const atBottom = isAtBottom();
     atBottomRef.current = atBottom;
@@ -137,12 +150,10 @@ export default function InterviewStage({
   }
 
   return (
-    // Use h-full so this fills its parent container rather than forcing 100vh.
-    // The dashboard page root already sets the viewport height.
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-[color:var(--background)]">
       {/* ── Step header ── */}
       <div className="shrink-0 border-b border-[color:var(--border)] bg-[color:var(--card)] px-6 py-3">
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-4xl mx-auto">
           <div className="text-xs text-[color:var(--accent)] font-medium">
             Step 2 of 3 — Interview
           </div>
@@ -153,19 +164,17 @@ export default function InterviewStage({
       </div>
 
       {/* ── Scrollable message list ── */}
-      {/* Relative wrapper so the scroll-to-bottom button can be positioned
-          inside the message area, above the composer. */}
       <div className="flex-1 min-h-0 relative">
         <div
           ref={scrollRef}
           onScroll={handleScroll}
-          className="h-full overflow-y-auto px-6 py-6"
+          className="h-full overflow-y-auto px-4 sm:px-6 py-6"
         >
-          <div className="max-w-3xl mx-auto space-y-6 pb-4">
+          <div className="max-w-4xl mx-auto space-y-5 pb-4">
             {messages.map((m) => (
               <Message key={m.id} message={m} />
             ))}
-            {isStreaming && last?.role === "user" && <TypingBubble />}
+            {isStreaming && last?.role === "user" && <ThinkingBubble />}
           </div>
         </div>
 
@@ -191,10 +200,28 @@ export default function InterviewStage({
         )}
       </div>
 
+      {/* ── Error banner — above the input box ── */}
+      {error && (
+        <div className="shrink-0 px-4 sm:px-6 pt-2">
+          <div className="max-w-4xl mx-auto rounded-xl border border-[color:var(--bad)]/30 bg-[color:var(--bad)]/5 px-4 py-2.5 text-sm text-[color:var(--bad)] flex items-center justify-between gap-3">
+            <span>{error}</span>
+            {onDismissError && (
+              <button
+                type="button"
+                onClick={onDismissError}
+                className="shrink-0 text-xs font-medium opacity-70 hover:opacity-100 transition"
+              >
+                Dismiss
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── Composer / ready banner ── */}
       {readySummary ? (
         <div className="shrink-0 border-t border-[color:var(--border)] bg-[color:var(--accent)]/5 px-6 py-4">
-          <div className="max-w-3xl mx-auto flex items-center gap-4">
+          <div className="max-w-4xl mx-auto flex items-center gap-4">
             <div className="flex-1">
               <div className="text-sm font-medium">Got it — ready to analyze.</div>
               <div className="text-xs text-[color:var(--muted)]">
@@ -204,7 +231,7 @@ export default function InterviewStage({
             <button
               onClick={() => onDone(readySummary)}
               disabled={isStreaming}
-              className="inline-flex items-center gap-2 rounded-lg bg-[color:var(--accent)] text-white px-5 py-2.5 font-medium hover:brightness-110 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-2 rounded-xl bg-[color:var(--accent)] text-white px-5 py-2.5 font-medium hover:brightness-110 transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Sparkles size={16} />
               Analyze idea
@@ -212,47 +239,50 @@ export default function InterviewStage({
           </div>
         </div>
       ) : (
-        <div className="shrink-0 border-t border-[color:var(--border)] bg-[color:var(--card)] px-6 py-4">
-          <div className="max-w-3xl mx-auto flex items-end gap-2">
-            <textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  submit();
-                }
-              }}
-              placeholder="Type your answer…"
-              rows={1}
-              className="flex-1 resize-none rounded-lg border border-[color:var(--border)] bg-[color:var(--background)] px-3 py-2 text-sm max-h-40 focus:outline-none focus:border-[color:var(--accent)] focus:ring-2 focus:ring-[color:var(--accent)]/20"
-              disabled={isStreaming}
-            />
-            <button
-              onClick={submit}
-              disabled={!draft.trim() || isStreaming}
-              className="rounded-lg bg-[color:var(--accent)] text-white p-2.5 hover:brightness-110 transition disabled:opacity-40 disabled:cursor-not-allowed"
-              aria-label="Send"
-            >
-              <Send size={16} />
-            </button>
-          </div>
-          {canEscape && (
-            <div className="max-w-3xl mx-auto mt-2 flex justify-end">
-              <button
-                onClick={() => {
-                  const summary = syntheticSummaryFromMessages(messages);
-                  if (summary) onDone(summary);
+        <div className="shrink-0 px-4 sm:px-6 pb-4 pt-2">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex items-end gap-2 rounded-2xl border border-[color:var(--border)] bg-[color:var(--card)] p-2 shadow-sm focus-within:border-[color:var(--accent)] focus-within:ring-2 focus-within:ring-[color:var(--accent)]/20 transition">
+              <textarea
+                ref={textareaRef}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    submit();
+                  }
                 }}
+                placeholder="Type your answer…"
+                rows={1}
+                className="flex-1 resize-none bg-transparent px-3 py-2.5 text-sm leading-relaxed max-h-40 focus:outline-none placeholder:text-[color:var(--muted)]"
                 disabled={isStreaming}
-                className="inline-flex items-center gap-1.5 text-xs text-[color:var(--muted)] hover:text-[color:var(--accent)] transition disabled:opacity-40 disabled:cursor-not-allowed"
-                title="Skip remaining questions and analyze now"
+              />
+              <button
+                onClick={submit}
+                disabled={!draft.trim() || isStreaming}
+                className="shrink-0 rounded-xl bg-[color:var(--accent)] text-white p-2.5 hover:brightness-110 transition disabled:opacity-30 disabled:cursor-not-allowed"
+                aria-label="Send"
               >
-                <Wand2 size={12} />
-                I&apos;m done — analyze now
+                <Send size={16} />
               </button>
             </div>
-          )}
+            {canEscape && (
+              <div className="mt-2 flex justify-end">
+                <button
+                  onClick={() => {
+                    const summary = syntheticSummaryFromMessages(messages);
+                    if (summary) onDone(summary);
+                  }}
+                  disabled={isStreaming}
+                  className="inline-flex items-center gap-1.5 text-xs text-[color:var(--muted)] hover:text-[color:var(--accent)] transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Skip remaining questions and analyze now"
+                >
+                  <Wand2 size={12} />
+                  I&apos;m done — analyze now
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -268,7 +298,7 @@ function Message({ message }: { message: ChatMessage }) {
   return (
     <div className={`flex gap-3 fade-in-up ${isUser ? "flex-row-reverse" : ""}`}>
       <div
-        className={`w-8 h-8 rounded-full shrink-0 flex items-center justify-center ${
+        className={`w-9 h-9 rounded-full shrink-0 flex items-center justify-center ${
           isUser
             ? "bg-[color:var(--foreground)] text-[color:var(--background)]"
             : "bg-[color:var(--accent)] text-white"
@@ -277,7 +307,7 @@ function Message({ message }: { message: ChatMessage }) {
         {isUser ? <User size={16} /> : <Sparkles size={16} />}
       </div>
       <div
-        className={`rounded-2xl px-4 py-2.5 max-w-[80%] text-sm leading-relaxed whitespace-pre-wrap ${
+        className={`rounded-3xl px-5 py-3 max-w-[85%] text-[15px] leading-relaxed whitespace-pre-wrap ${
           isUser
             ? "bg-[color:var(--foreground)] text-[color:var(--background)]"
             : "bg-[color:var(--card)] border border-[color:var(--border)]"
@@ -289,17 +319,20 @@ function Message({ message }: { message: ChatMessage }) {
   );
 }
 
-function TypingBubble() {
+function ThinkingBubble() {
   return (
     <div className="flex gap-3 fade-in-up">
-      <div className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center bg-[color:var(--accent)] text-white">
-        <Sparkles size={16} />
+      <div className="w-9 h-9 rounded-full shrink-0 flex items-center justify-center bg-[color:var(--accent)] text-white">
+        <Sparkles size={16} className="animate-pulse" />
       </div>
-      <div className="rounded-2xl px-4 py-3 bg-[color:var(--card)] border border-[color:var(--border)]">
-        <div className="flex items-center gap-1">
-          <span className="typing-dot w-1.5 h-1.5 rounded-full bg-[color:var(--muted)]" />
-          <span className="typing-dot w-1.5 h-1.5 rounded-full bg-[color:var(--muted)]" />
-          <span className="typing-dot w-1.5 h-1.5 rounded-full bg-[color:var(--muted)]" />
+      <div className="rounded-3xl px-5 py-3 bg-[color:var(--card)] border border-[color:var(--border)]">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <span className="typing-dot w-2 h-2 rounded-full bg-[color:var(--accent)]/60" />
+            <span className="typing-dot w-2 h-2 rounded-full bg-[color:var(--accent)]/60" />
+            <span className="typing-dot w-2 h-2 rounded-full bg-[color:var(--accent)]/60" />
+          </div>
+          <span className="text-xs text-[color:var(--muted)] ml-1">Thinking…</span>
         </div>
       </div>
     </div>

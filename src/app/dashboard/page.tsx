@@ -638,6 +638,8 @@ export default function Home() {
             onSend={sendInterviewAnswer}
             onDone={runAnalysis}
             isStreaming={isStreaming}
+            error={error}
+            onDismissError={() => setError(null)}
           />
           </div>
         )}
