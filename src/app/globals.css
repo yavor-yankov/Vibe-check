@@ -108,7 +108,8 @@ html, body {
   body {
     background: white !important;
     color: black !important;
-    font-size: 12pt;
+    font-size: 11pt;
+    line-height: 1.5;
   }
 
   /* Remove decorative animations in print */
@@ -129,6 +130,32 @@ html, body {
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+  }
+
+  /* Print-friendly borders and cards */
+  section, [class*="rounded-xl"] {
+    border-color: #d4d4d8 !important;
+    box-shadow: none !important;
+  }
+
+  /* Make links show their URL in print */
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 8pt;
+    color: #666;
+    word-break: break-all;
+  }
+
+  /* Branded header for printed reports */
+  body::before {
+    content: "Vibe Check Report";
+    display: block;
+    font-size: 8pt;
+    color: #999;
+    text-align: center;
+    padding-bottom: 8pt;
+    border-bottom: 1px solid #e4e4e7;
+    margin-bottom: 16pt;
   }
 
   /* Page breaks: avoid splitting cards across pages */

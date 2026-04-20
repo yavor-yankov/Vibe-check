@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
   // not benefit from a larger model. We never want this to burn the user's
   // quota or noticeably increase latency.
   const model = client.getGenerativeModel({
-    model: "gemini-2.0-flash-lite",
+    model: "gemini-2.5-flash-lite",
     generationConfig: { temperature: 0.4, maxOutputTokens: 30 },
   });
 
