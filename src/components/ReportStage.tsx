@@ -525,8 +525,32 @@ export default function ReportStage({
         {redTeamOpen && (
           <div className="mt-4 space-y-4">
             {isRedTeamLoading && (
-              <div className="text-sm text-[color:var(--muted)]">
-                Running the red-team pass…
+              <div className="space-y-4 mt-1">
+                {/* Verdict placeholder */}
+                <div className="rounded-lg border border-[color:var(--bad)]/20 bg-[color:var(--background)] p-4 space-y-2">
+                  <div className="skeleton h-3 w-16" />
+                  <div className="skeleton h-4 w-3/4" style={{ animationDelay: "0.1s" }} />
+                </div>
+                {/* Reasons not to build */}
+                <div className="space-y-2">
+                  <div className="skeleton h-3 w-32 mb-1" />
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="flex gap-2 items-start">
+                      <div className="skeleton-circle w-3 h-3 mt-0.5 shrink-0" style={{ animationDelay: `${i * 0.1}s` }} />
+                      <div className="skeleton h-3 flex-1" style={{ animationDelay: `${i * 0.1 + 0.05}s` }} />
+                    </div>
+                  ))}
+                </div>
+                {/* Silent killers */}
+                <div className="space-y-2">
+                  <div className="skeleton h-3 w-24 mb-1" style={{ animationDelay: "0.05s" }} />
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="flex gap-2 items-start">
+                      <div className="skeleton-circle w-3 h-3 mt-0.5 shrink-0" style={{ animationDelay: `${i * 0.1 + 0.3}s` }} />
+                      <div className="skeleton h-3 flex-1" style={{ animationDelay: `${i * 0.1 + 0.35}s` }} />
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
             {redTeamError && (

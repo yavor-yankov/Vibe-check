@@ -8,6 +8,7 @@ import InterviewStage, {
 } from "@/components/InterviewStage";
 import ScanningStage from "@/components/ScanningStage";
 import ReportStage from "@/components/ReportStage";
+import ReportSkeleton from "@/components/ReportSkeleton";
 import Sidebar from "@/components/Sidebar";
 import type {
   AnalysisReport,
@@ -466,11 +467,7 @@ export default function Home() {
   };
 
   if (!isHydrated || !current) {
-    return (
-      <div className="flex-1 grid place-items-center text-[color:var(--muted)]">
-        Loading…
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (
@@ -529,6 +526,12 @@ export default function Home() {
                   : undefined
               }
             />
+          </div>
+        )}
+
+        {current.stage === "report" && !current.report && (
+          <div className="flex-1 overflow-y-auto">
+            <ReportSkeleton />
           </div>
         )}
 
@@ -598,4 +601,40 @@ async function migrateLocalStorageIfNeeded(
   }
   migrated.sort((a, b) => b.updatedAt - a.updatedAt);
   return migrated;
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard skeleton — shown on first load while sessions hydrate from Postgres
+// ---------------------------------------------------------------------------
+function DashboardSkeleton() {
+  return (
+    <div className="flex h-screen overflow-hidden">
+      {/* Sidebar skeleton */}
+      <aside className="hidden md:flex flex-col w-64 shrink-0 border-r border-[color:var(--border)] bg-[color:var(--card)] p-4 gap-4">
+        <div className="skeleton h-6 w-32" />
+        <div className="skeleton h-9 w-full rounded-lg" style={{ animationDelay: "0.05s" }} />
+        <div className="flex-1 space-y-2 mt-2">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="skeleton h-10 w-full rounded-lg" style={{ animationDelay: `${0.1 + i * 0.07}s` }} />
+          ))}
+        </div>
+        <div className="skeleton h-[72px] w-full rounded-lg" style={{ animationDelay: "0.4s" }} />
+      </aside>
+
+      {/* Main area — mirrors IntroStage layout */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="max-w-2xl mx-auto px-6 py-16 space-y-4">
+          <div className="skeleton h-3 w-24" />
+          <div className="skeleton h-9 w-3/4" style={{ animationDelay: "0.05s" }} />
+          <div className="skeleton h-4 w-full" style={{ animationDelay: "0.1s" }} />
+          <div className="skeleton h-4 w-4/5" style={{ animationDelay: "0.15s" }} />
+          <div className="skeleton h-32 w-full rounded-xl mt-4" style={{ animationDelay: "0.2s" }} />
+          <div className="flex gap-3 mt-2">
+            <div className="skeleton h-10 w-32 rounded-lg" style={{ animationDelay: "0.25s" }} />
+            <div className="skeleton h-10 w-24 rounded-lg" style={{ animationDelay: "0.3s" }} />
+          </div>
+        </div>
+      </main>
+    </div>
+  );
 }
