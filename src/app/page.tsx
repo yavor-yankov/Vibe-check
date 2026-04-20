@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import {
   Sparkles,
@@ -13,10 +15,14 @@ import {
   Star,
 } from "lucide-react";
 import { PRICING_TIERS } from "@/lib/billing/plan";
+import { useTranslation } from "@/lib/i18n/useTranslation";
+import LanguagePicker from "@/components/LanguagePicker";
 
 // ─── Hero ─────────────────────────────────────────────────────────────────────
 
 function Hero() {
+  const { t } = useTranslation();
+
   return (
     <section className="relative overflow-hidden pt-24 pb-20 px-6 text-center">
       {/* Ambient glow blobs */}
@@ -33,11 +39,11 @@ function Hero() {
         {/* Badge */}
         <div className="inline-flex items-center gap-2 rounded-full border border-[color:var(--accent)]/30 bg-[color:var(--accent)]/10 px-3 py-1 text-xs font-medium text-[color:var(--accent)] mb-6">
           <Star size={12} fill="currentColor" />
-          Interview-style AI for founders &amp; builders
+          {t("landing.hero.badge")}
         </div>
 
         <h1 className="text-5xl md:text-6xl font-bold tracking-tight leading-tight">
-          Is your app idea{" "}
+          {t("landing.hero.heading1")}
           <span
             style={{
               background:
@@ -46,15 +52,12 @@ function Hero() {
               WebkitTextFillColor: "transparent",
             }}
           >
-            worth building?
+            {t("landing.hero.headingHighlight")}
           </span>
         </h1>
 
         <p className="mt-5 text-xl text-[color:var(--muted)] max-w-2xl mx-auto leading-relaxed">
-          Vibe Check pressure-tests your app concept with a Socratic AI
-          interview, scans the web for real competitors, and delivers a
-          scored report with a devil&apos;s-advocate red-team pass — in
-          under 5 minutes.
+          {t("landing.hero.description")}
         </p>
 
         <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -62,19 +65,19 @@ function Hero() {
             href="/signin"
             className="inline-flex items-center gap-2 rounded-xl bg-[color:var(--accent)] text-white px-6 py-3 text-base font-semibold hover:brightness-110 transition shadow-lg shadow-[color:var(--accent)]/20"
           >
-            Start free — no card needed
+            {t("landing.hero.ctaPrimary")}
             <ArrowRight size={18} />
           </Link>
           <Link
             href="/pricing"
             className="inline-flex items-center gap-2 rounded-xl border border-[color:var(--border)] bg-[color:var(--card)] px-6 py-3 text-base font-medium hover:bg-[color:var(--background)] transition"
           >
-            See pricing
+            {t("landing.hero.ctaSecondary")}
           </Link>
         </div>
 
         <p className="mt-4 text-sm text-[color:var(--muted)]">
-          3 free checks per month · No credit card · Cancel anytime
+          {t("landing.hero.subtext")}
         </p>
       </div>
 
@@ -87,11 +90,20 @@ function Hero() {
 }
 
 function MockReportPreview() {
+  const { t } = useTranslation();
+
   const scores = [
-    { label: "Viability", value: 8 },
-    { label: "Problem fit", value: 9 },
-    { label: "Niche clarity", value: 7 },
-    { label: "Differentiation", value: 6 },
+    { label: t("landing.hero.mock.viability"), value: 8 },
+    { label: t("landing.hero.mock.problemFit"), value: 9 },
+    { label: t("landing.hero.mock.nicheClarity"), value: 7 },
+    { label: t("landing.hero.mock.differentiation"), value: 6 },
+  ];
+
+  const chips = [
+    t("landing.hero.mock.chip1"),
+    t("landing.hero.mock.chip2"),
+    t("landing.hero.mock.chip3"),
+    t("landing.hero.mock.chip4"),
   ];
 
   return (
@@ -102,7 +114,7 @@ function MockReportPreview() {
         <div className="w-3 h-3 rounded-full bg-[color:var(--warn)] opacity-80" />
         <div className="w-3 h-3 rounded-full bg-[color:var(--good)] opacity-80" />
         <span className="ml-2 text-xs text-[color:var(--muted)] font-mono">
-          vibe-check — report
+          {t("landing.hero.mock.titleBar")}
         </span>
       </div>
 
@@ -111,15 +123,15 @@ function MockReportPreview() {
         <div className="sm:col-span-2 flex items-center justify-between">
           <div>
             <div className="text-xs uppercase tracking-wider text-[color:var(--muted)] font-medium mb-1">
-              Verdict
+              {t("landing.hero.mock.verdictLabel")}
             </div>
             <div className="text-lg font-bold text-[color:var(--good)]">
-              🚀 Ship the MVP
+              {t("landing.hero.mock.verdictValue")}
             </div>
           </div>
           <div className="text-right">
             <div className="text-xs uppercase tracking-wider text-[color:var(--muted)] font-medium mb-1">
-              Overall score
+              {t("landing.hero.mock.overallScoreLabel")}
             </div>
             <div className="text-3xl font-bold">7.5<span className="text-base text-[color:var(--muted)]">/10</span></div>
           </div>
@@ -143,12 +155,7 @@ function MockReportPreview() {
 
         {/* Insight chips */}
         <div className="sm:col-span-2 flex flex-wrap gap-2 pt-1">
-          {[
-            "Market: $2B–$8B",
-            "Build: 1–2 weeks",
-            "4 competitors found",
-            "Low regulatory risk",
-          ].map((chip) => (
+          {chips.map((chip) => (
             <span
               key={chip}
               className="text-xs px-2.5 py-1 rounded-full border border-[color:var(--border)] text-[color:var(--muted)]"
@@ -165,11 +172,13 @@ function MockReportPreview() {
 // ─── Social proof strip ────────────────────────────────────────────────────────
 
 function StatsStrip() {
+  const { t } = useTranslation();
+
   const stats = [
-    { value: "5 min", label: "Average session" },
-    { value: "5 scores", label: "Viability dimensions" },
-    { value: "3 sources", label: "Competitor scan queries" },
-    { value: "Free", label: "To get started" },
+    { value: t("landing.stats.value1"), label: t("landing.stats.label1") },
+    { value: t("landing.stats.value2"), label: t("landing.stats.label2") },
+    { value: t("landing.stats.value3"), label: t("landing.stats.label3") },
+    { value: t("landing.stats.value4"), label: t("landing.stats.label4") },
   ];
 
   return (
@@ -191,27 +200,26 @@ function StatsStrip() {
 // ─── How it works ─────────────────────────────────────────────────────────────
 
 function HowItWorks() {
+  const { t } = useTranslation();
+
   const steps = [
     {
       icon: MessageSquare,
       step: "01",
-      title: "Pitch your idea",
-      description:
-        "Drop your concept in a single sentence. The AI coach starts digging — one sharp question per turn, no fluff.",
+      title: t("landing.howItWorks.step1Title"),
+      description: t("landing.howItWorks.step1Description"),
     },
     {
       icon: Globe,
       step: "02",
-      title: "We scan the web",
-      description:
-        "While you answer, Tavily searches for real competitors, similar products, and market signals. No made-up results.",
+      title: t("landing.howItWorks.step2Title"),
+      description: t("landing.howItWorks.step2Description"),
     },
     {
       icon: BarChart3,
       step: "03",
-      title: "Get your scored report",
-      description:
-        "A full breakdown: viability scores, strengths, risks, tech stack, MVP scope, market size, and a devil's-advocate red-team pass.",
+      title: t("landing.howItWorks.step3Title"),
+      description: t("landing.howItWorks.step3Description"),
     },
   ];
 
@@ -220,14 +228,13 @@ function HowItWorks() {
       <div className="mx-auto max-w-5xl">
         <div className="text-center mb-14">
           <div className="text-xs uppercase tracking-widest text-[color:var(--accent)] font-semibold mb-3">
-            How it works
+            {t("landing.howItWorks.sectionLabel")}
           </div>
           <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
-            Pressure-test an idea in three steps
+            {t("landing.howItWorks.heading")}
           </h2>
           <p className="mt-4 text-[color:var(--muted)] max-w-xl mx-auto">
-            No forms to fill. Just a conversation — the same questions a
-            good YC partner would ask before writing a check.
+            {t("landing.howItWorks.description")}
           </p>
         </div>
 
@@ -258,43 +265,15 @@ function HowItWorks() {
 // ─── Features ─────────────────────────────────────────────────────────────────
 
 function Features() {
+  const { t } = useTranslation();
+
   const features = [
-    {
-      icon: BarChart3,
-      title: "5-dimension viability scores",
-      description:
-        "Viability, niche clarity, problem strength, differentiation, and an honest overall score — not inflated to be nice.",
-    },
-    {
-      icon: Globe,
-      title: "Real competitor research",
-      description:
-        "Three targeted search queries surface actual apps in your space. The analysis is grounded in what exists, not hallucinated.",
-    },
-    {
-      icon: TrendingUp,
-      title: "Expanded market insights",
-      description:
-        "Market size estimate, funding signals, failed-predecessor graveyard, build effort bucket, and regulatory flags — all in one pass.",
-    },
-    {
-      icon: Shield,
-      title: "Devil's advocate red-team",
-      description:
-        "A ruthless investor-persona tears apart your idea: silent killers, distribution risk, unit economics — the things founders miss.",
-    },
-    {
-      icon: Zap,
-      title: "Tech stack + MVP roadmap",
-      description:
-        "Tailored technology recommendations and a 4-6 step ordered roadmap of shippable milestones — not generic advice.",
-    },
-    {
-      icon: MessageSquare,
-      title: "Refine &amp; re-score",
-      description:
-        "Not happy with the analysis? Edit the pitch and re-run. History is saved so you can track how your idea evolves.",
-    },
+    { icon: BarChart3, titleKey: "landing.features.feature1Title" as const, descKey: "landing.features.feature1Description" as const },
+    { icon: Globe, titleKey: "landing.features.feature2Title" as const, descKey: "landing.features.feature2Description" as const },
+    { icon: TrendingUp, titleKey: "landing.features.feature3Title" as const, descKey: "landing.features.feature3Description" as const },
+    { icon: Shield, titleKey: "landing.features.feature4Title" as const, descKey: "landing.features.feature4Description" as const },
+    { icon: Zap, titleKey: "landing.features.feature5Title" as const, descKey: "landing.features.feature5Description" as const },
+    { icon: MessageSquare, titleKey: "landing.features.feature6Title" as const, descKey: "landing.features.feature6Description" as const },
   ];
 
   return (
@@ -302,32 +281,30 @@ function Features() {
       <div className="mx-auto max-w-5xl">
         <div className="text-center mb-14">
           <div className="text-xs uppercase tracking-widest text-[color:var(--accent)] font-semibold mb-3">
-            What you get
+            {t("landing.features.sectionLabel")}
           </div>
           <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
-            Everything in one report
+            {t("landing.features.heading")}
           </h2>
           <p className="mt-4 text-[color:var(--muted)] max-w-xl mx-auto">
-            Most tools give you a hype check. Vibe Check gives you a reality
-            check.
+            {t("landing.features.description")}
           </p>
         </div>
 
         <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {features.map(({ icon: Icon, title, description }) => (
+          {features.map(({ icon: Icon, titleKey, descKey }) => (
             <div
-              key={title}
+              key={titleKey}
               className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)] p-5 hover:border-[color:var(--accent)]/40 transition"
             >
               <div className="w-9 h-9 rounded-lg bg-[color:var(--accent)]/10 flex items-center justify-center mb-3">
                 <Icon size={18} className="text-[color:var(--accent)]" />
               </div>
-              <h3
-                className="text-sm font-semibold mb-1.5"
-                dangerouslySetInnerHTML={{ __html: title }}
-              />
+              <h3 className="text-sm font-semibold mb-1.5">
+                {t(titleKey)}
+              </h3>
               <p className="text-sm text-[color:var(--muted)] leading-relaxed">
-                {description}
+                {t(descKey)}
               </p>
             </div>
           ))}
@@ -339,7 +316,9 @@ function Features() {
 
 // ─── Pricing ──────────────────────────────────────────────────────────────────
 
-function Pricing() {
+function PricingSection() {
+  const { t } = useTranslation();
+
   const tiers = [
     PRICING_TIERS.free,
     PRICING_TIERS.pro,
@@ -351,14 +330,13 @@ function Pricing() {
       <div className="mx-auto max-w-5xl">
         <div className="text-center mb-14">
           <div className="text-xs uppercase tracking-widest text-[color:var(--accent)] font-semibold mb-3">
-            Pricing
+            {t("landing.pricing.sectionLabel")}
           </div>
           <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
-            Pick a plan that fits the idea
+            {t("landing.pricing.heading")}
           </h2>
           <p className="mt-4 text-[color:var(--muted)] max-w-xl mx-auto">
-            Start free. When you&apos;re burning through ideas faster than 3
-            a month, Pro unlocks unlimited checks and better reasoning.
+            {t("landing.pricing.description")}
           </p>
         </div>
 
@@ -376,7 +354,7 @@ function Pricing() {
               >
                 {highlight && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs px-3 py-0.5 rounded-full bg-[color:var(--accent)] text-white font-medium whitespace-nowrap">
-                    Most popular
+                    {t("landing.pricing.mostPopular")}
                   </div>
                 )}
 
@@ -389,7 +367,7 @@ function Pricing() {
                   </span>
                   {tier.tier === "pro" && (
                     <span className="text-sm text-[color:var(--muted)]">
-                      /month
+                      {t("landing.pricing.perMonth")}
                     </span>
                   )}
                 </div>
@@ -427,8 +405,7 @@ function Pricing() {
         </div>
 
         <p className="mt-8 text-xs text-[color:var(--muted)] text-center">
-          Payments handled by Stripe. Cancel anytime from your billing
-          portal. Lifetime tier limited to the first 100 subscribers.
+          {t("landing.pricing.footer")}
         </p>
       </div>
     </section>
@@ -438,31 +415,15 @@ function Pricing() {
 // ─── FAQ ──────────────────────────────────────────────────────────────────────
 
 function FAQ() {
+  const { t } = useTranslation();
+
   const faqs = [
-    {
-      q: "How many interview questions will I get?",
-      a: "The AI coach asks 5–7 focused questions — one per turn — then wraps up when it has enough signal. You can also skip straight to the report at any time using the &ldquo;analyze now&rdquo; shortcut.",
-    },
-    {
-      q: "Where do the competitor results come from?",
-      a: "We use Tavily&apos;s search API to run three targeted queries against live web results. No cached databases, no hallucinated company names. If nothing relevant surfaces, the report says so honestly.",
-    },
-    {
-      q: "Can I re-analyze the same idea after tweaking the pitch?",
-      a: "Yes. From the report screen, hit &ldquo;Re-score&rdquo;, edit your pitch summary, and submit. The session stays the same in your history — you&apos;ll see the updated scores immediately.",
-    },
-    {
-      q: "What is the devil&apos;s advocate pass?",
-      a: "A separate AI persona — a skeptical early-stage investor — stress-tests your idea with concrete failure modes: distribution cost, unit economics, moat erosion, cold-start problems, and more. It only tells you the bad news.",
-    },
-    {
-      q: "Is my idea data stored or used to train models?",
-      a: "Your sessions are stored in Supabase (Postgres) under your account, protected by row-level security. We don&apos;t share your data with third parties or use it to train models.",
-    },
-    {
-      q: "What models power Vibe Check?",
-      a: "Free tier uses Gemini 2.5 Flash Lite. Pro and Lifetime subscribers get Gemini 2.5 Flash — better reasoning, same speed. Competitor search is powered by the Tavily API.",
-    },
+    { q: t("landing.faq.q1"), a: t("landing.faq.a1") },
+    { q: t("landing.faq.q2"), a: t("landing.faq.a2") },
+    { q: t("landing.faq.q3"), a: t("landing.faq.a3") },
+    { q: t("landing.faq.q4"), a: t("landing.faq.a4") },
+    { q: t("landing.faq.q5"), a: t("landing.faq.a5") },
+    { q: t("landing.faq.q6"), a: t("landing.faq.a6") },
   ];
 
   return (
@@ -470,10 +431,10 @@ function FAQ() {
       <div className="mx-auto max-w-2xl">
         <div className="text-center mb-12">
           <div className="text-xs uppercase tracking-widest text-[color:var(--accent)] font-semibold mb-3">
-            FAQ
+            {t("landing.faq.sectionLabel")}
           </div>
           <h2 className="text-3xl font-bold tracking-tight">
-            Common questions
+            {t("landing.faq.heading")}
           </h2>
         </div>
 
@@ -484,16 +445,15 @@ function FAQ() {
               className="group rounded-xl border border-[color:var(--border)] bg-[color:var(--background)] overflow-hidden"
             >
               <summary className="flex items-center justify-between gap-4 px-5 py-4 cursor-pointer text-sm font-medium list-none select-none hover:bg-[color:var(--card)] transition">
-                <span dangerouslySetInnerHTML={{ __html: q }} />
+                <span>{q}</span>
                 <ChevronDown
                   size={16}
                   className="shrink-0 text-[color:var(--muted)] transition-transform group-open:rotate-180"
                 />
               </summary>
-              <div
-                className="px-5 pb-4 text-sm text-[color:var(--muted)] leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: a }}
-              />
+              <div className="px-5 pb-4 text-sm text-[color:var(--muted)] leading-relaxed">
+                {a}
+              </div>
             </details>
           ))}
         </div>
@@ -505,6 +465,8 @@ function FAQ() {
 // ─── CTA Banner ───────────────────────────────────────────────────────────────
 
 function CTABanner() {
+  const { t } = useTranslation();
+
   return (
     <section className="py-24 px-6 text-center">
       <div className="mx-auto max-w-2xl">
@@ -518,26 +480,24 @@ function CTABanner() {
           <Sparkles size={28} className="text-white" />
         </div>
         <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
-          Stop guessing. Start building the right thing.
+          {t("landing.cta.heading")}
         </h2>
         <p className="mt-4 text-[color:var(--muted)] text-lg max-w-lg mx-auto">
-          Three free vibe checks a month. No credit card. Cancel anytime.
-          The hardest part is having the idea — we&apos;ll handle the
-          reality check.
+          {t("landing.cta.description")}
         </p>
         <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
             href="/signin"
             className="inline-flex items-center gap-2 rounded-xl bg-[color:var(--accent)] text-white px-7 py-3.5 text-base font-semibold hover:brightness-110 transition shadow-lg shadow-[color:var(--accent)]/20"
           >
-            Get started free
+            {t("landing.cta.primaryButton")}
             <ArrowRight size={18} />
           </Link>
           <Link
             href="/pricing"
             className="text-sm text-[color:var(--muted)] hover:text-[color:var(--foreground)] transition"
           >
-            View full pricing →
+            {t("landing.cta.secondaryLink")}
           </Link>
         </div>
       </div>
@@ -548,6 +508,8 @@ function CTABanner() {
 // ─── Nav ──────────────────────────────────────────────────────────────────────
 
 function Nav() {
+  const { t } = useTranslation();
+
   return (
     <header className="sticky top-0 z-40 border-b border-[color:var(--border)] bg-[color:var(--background)]/80 backdrop-blur-md">
       <div className="mx-auto max-w-6xl px-6 h-14 flex items-center justify-between">
@@ -555,23 +517,24 @@ function Nav() {
           <div className="w-7 h-7 rounded-lg bg-[color:var(--accent)] flex items-center justify-center">
             <Sparkles size={15} className="text-white" />
           </div>
-          <span className="font-semibold text-sm">Vibe Check</span>
+          <span className="font-semibold text-sm">{t("landing.nav.brand")}</span>
         </div>
 
         <nav className="hidden sm:flex items-center gap-6 text-sm text-[color:var(--muted)]">
           <Link href="#pricing" className="hover:text-[color:var(--foreground)] transition">
-            Pricing
+            {t("landing.nav.pricing")}
           </Link>
           <Link href="/signin" className="hover:text-[color:var(--foreground)] transition">
-            Sign in
+            {t("landing.nav.signIn")}
           </Link>
+          <LanguagePicker />
         </nav>
 
         <Link
           href="/signin"
           className="rounded-lg bg-[color:var(--accent)] text-white px-4 py-1.5 text-sm font-medium hover:brightness-110 transition"
         >
-          Start free
+          {t("landing.nav.startFree")}
         </Link>
       </div>
     </header>
@@ -581,6 +544,8 @@ function Nav() {
 // ─── Footer ───────────────────────────────────────────────────────────────────
 
 function Footer() {
+  const { t } = useTranslation();
+
   return (
     <footer className="border-t border-[color:var(--border)] py-8 px-6">
       <div className="mx-auto max-w-5xl flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-[color:var(--muted)]">
@@ -588,16 +553,16 @@ function Footer() {
           <div className="w-5 h-5 rounded-md bg-[color:var(--accent)] flex items-center justify-center">
             <Sparkles size={11} className="text-white" />
           </div>
-          <span>Vibe Check</span>
+          <span>{t("landing.footer.brand")}</span>
           <span className="text-[color:var(--border)]">·</span>
-          <span>Powered by Gemini &amp; Tavily</span>
+          <span>{t("landing.footer.poweredBy")}</span>
         </div>
         <div className="flex items-center gap-5">
           <Link href="/pricing" className="hover:text-[color:var(--foreground)] transition">
-            Pricing
+            {t("landing.footer.pricing")}
           </Link>
           <Link href="/signin" className="hover:text-[color:var(--foreground)] transition">
-            Sign in
+            {t("landing.footer.signIn")}
           </Link>
         </div>
       </div>
@@ -616,7 +581,7 @@ export default function LandingPage() {
         <StatsStrip />
         <HowItWorks />
         <Features />
-        <Pricing />
+        <PricingSection />
         <FAQ />
         <CTABanner />
       </main>
