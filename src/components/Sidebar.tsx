@@ -77,7 +77,7 @@ export default function Sidebar({
 
   const handleSelect = (id: string) => {
     onSelect(id);
-    onClose?.(); // close drawer on mobile after selecting a session
+    onClose?.();
   };
 
   const handleNew = () => {
@@ -85,27 +85,20 @@ export default function Sidebar({
     onClose?.();
   };
 
-  /** Filtered + searched sessions list */
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return sessions.filter((s) => {
-      // Search filter
       if (q && !s.title.toLowerCase().includes(q)) return false;
-      // Verdict filter
       if (verdictFilter !== "all") {
-        if (verdictFilter === "in_progress") {
-          return !s.report;
-        }
+        if (verdictFilter === "in_progress") return !s.report;
         return s.report?.verdict === verdictFilter;
       }
       return true;
     });
   }, [sessions, query, verdictFilter]);
 
-  // Only show filter chips when there are enough sessions to warrant it.
   const showFilters = sessions.length > 3;
 
-  // Count sessions per verdict for filter chip badges.
   const counts = useMemo(() => {
     const c: Record<VerdictFilter, number> = {
       all: sessions.length,
@@ -128,7 +121,6 @@ export default function Sidebar({
 
   return (
     <>
-      {/* Mobile overlay — shown when drawer is open on small screens */}
       {isOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/40 md:hidden"
@@ -139,19 +131,14 @@ export default function Sidebar({
 
       <aside
         className={[
-          // Base styles (apply at all sizes)
           "w-72 shrink-0 border-r border-[color:var(--border)] bg-[color:var(--card)]",
           "flex flex-col h-screen",
-          // Desktop: always-visible sticky column
           "md:sticky md:top-0",
-          // Mobile: fixed slide-in drawer, z-index above overlay
           "fixed inset-y-0 left-0 z-50 transition-transform duration-300 ease-in-out",
           isOpen ? "translate-x-0" : "-translate-x-full",
-          // On md+, override the mobile transform — always show
           "md:translate-x-0 md:relative md:z-auto",
         ].join(" ")}
       >
-        {/* Header */}
         <div className="p-4 flex items-center gap-2 border-b border-[color:var(--border)]">
           <Link
             href="/dashboard"
@@ -168,7 +155,6 @@ export default function Sidebar({
               </div>
             </div>
           </Link>
-          {/* Close button — mobile only */}
           <button
             type="button"
             onClick={onClose}
@@ -187,7 +173,6 @@ export default function Sidebar({
           New vibe check
         </button>
 
-        {/* Compare mode toggle */}
         {sessions.filter((s) => s.report).length >= 2 && (
           <div className="mx-4 mt-2 flex items-center gap-2">
             {compareMode ? (
@@ -223,11 +208,8 @@ export default function Sidebar({
             )}
           </div>
         )}
-        </button>
 
-        {/* ── Idea Library search + filters ── */}
         <div className="px-3 pt-4 pb-2 space-y-2">
-          {/* Search box */}
           <div className="relative">
             <Search
               size={13}
@@ -252,7 +234,6 @@ export default function Sidebar({
             )}
           </div>
 
-          {/* Verdict filter chips — only shown when there's enough data */}
           {showFilters && (
             <div className="flex flex-wrap gap-1">
               {(["all", "build_it", "iterate", "rethink", "skip", "in_progress"] as VerdictFilter[])
@@ -281,7 +262,6 @@ export default function Sidebar({
           )}
         </div>
 
-        {/* Session list */}
         <div className="flex-1 overflow-y-auto px-2 pb-4">
           {sessions.length === 0 ? (
             <div className="px-3 py-6 text-sm text-[color:var(--muted)] text-center">
@@ -371,7 +351,6 @@ export default function Sidebar({
         </div>
       </aside>
 
-      {/* Mobile hamburger toggle — visible only on small screens when sidebar is closed */}
       {!isOpen && (
         <button
           type="button"
