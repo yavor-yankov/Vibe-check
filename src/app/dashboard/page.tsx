@@ -654,6 +654,10 @@ export default function Home() {
             isStreaming={isStreaming}
             error={error}
             onDismissError={() => setError(null)}
+            onRetry={() => {
+              // Retry: resend the current session to get the assistant reply
+              if (current) streamAssistantReply(current);
+            }}
           />
           </div>
         )}

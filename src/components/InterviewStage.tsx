@@ -12,6 +12,7 @@ interface InterviewStageProps {
   isStreaming: boolean;
   error?: string | null;
   onDismissError?: () => void;
+  onRetry?: () => void;
 }
 
 // Minimum user turns before the "analyze now" escape hatch is offered.
@@ -55,6 +56,7 @@ export default function InterviewStage({
   isStreaming,
   error,
   onDismissError,
+  onRetry,
 }: InterviewStageProps) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState("");
@@ -207,15 +209,26 @@ export default function InterviewStage({
         <div className="shrink-0 px-4 sm:px-6 pt-2">
           <div className="max-w-4xl mx-auto rounded-xl border border-[color:var(--bad)]/30 bg-[color:var(--bad)]/5 px-4 py-2.5 text-sm text-[color:var(--bad)] flex items-center justify-between gap-3">
             <span>{error}</span>
-            {onDismissError && (
-              <button
-                type="button"
-                onClick={onDismissError}
-                className="shrink-0 text-xs font-medium opacity-70 hover:opacity-100 transition"
-              >
-                {t("interview.dismiss")}
-              </button>
-            )}
+            <div className="flex items-center gap-2 shrink-0">
+              {onRetry && (
+                <button
+                  type="button"
+                  onClick={() => { onDismissError?.(); onRetry(); }}
+                  className="text-xs font-semibold px-3 py-1 rounded-lg bg-[color:var(--bad)]/10 hover:bg-[color:var(--bad)]/20 transition"
+                >
+                  {t("interview.retry")}
+                </button>
+              )}
+              {onDismissError && (
+                <button
+                  type="button"
+                  onClick={onDismissError}
+                  className="text-xs font-medium opacity-70 hover:opacity-100 transition"
+                >
+                  {t("interview.dismiss")}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -249,6 +262,7 @@ export default function InterviewStage({
                 value={draft}
                 onChange={(e) => {
                   if (e.target.value.length <= 2000) setDraft(e.target.value);
+                  if (error) onDismissError?.();
                 }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {

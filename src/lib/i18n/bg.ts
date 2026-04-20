@@ -52,6 +52,7 @@ const bg: Record<import("./en").TranslationKey, string> = {
   "interview.escapeHatch": "Стига толкова — анализирай сега",
   "interview.escapeHatchTooltip": "Пропусни останалите въпроси и анализирай сега",
   "interview.thinking": "Мисля…",
+  "interview.retry": "Опитай пак",
 
   // ─── ScanningStage ───────────────────────────────────────────────────────────
   "scanning.stepLabel": "Стъпка 3 от 3 — Анализиране",

@@ -52,6 +52,7 @@ const en = {
   "interview.escapeHatch": "I'm done — analyze now",
   "interview.escapeHatchTooltip": "Skip remaining questions and analyze now",
   "interview.thinking": "Thinking…",
+  "interview.retry": "Retry",
 
   // ─── ScanningStage ───────────────────────────────────────────────────────────
   "scanning.stepLabel": "Step 3 of 3 — Analyzing",
