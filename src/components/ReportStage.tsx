@@ -930,11 +930,20 @@ export default function ReportStage({
             <button
               onClick={handleEmailReport}
               disabled={emailStatus === "sending"}
-              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium hover:bg-[color:var(--background)] transition disabled:opacity-40"
+              className={[
+                "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition",
+                emailStatus === "sending"
+                  ? "bg-[color:var(--accent)]/10 text-[color:var(--accent)] animate-pulse"
+                  : emailStatus === "sent"
+                    ? "bg-[color:var(--good)]/10 text-[color:var(--good)]"
+                    : emailStatus === "error"
+                      ? "bg-[color:var(--bad)]/10 text-[color:var(--bad)]"
+                      : "hover:bg-[color:var(--background)]",
+              ].join(" ")}
               title="Email report to yourself"
             >
               <Mail size={13} />
-              {emailStatus === "sending" ? "..." : emailStatus === "sent" ? "Sent!" : emailStatus === "error" ? "Failed" : "Email"}
+              {emailStatus === "sending" ? "Sending…" : emailStatus === "sent" ? "Sent!" : emailStatus === "error" ? "Failed" : "Email"}
             </button>
             <div className="w-px h-5 bg-[color:var(--border)]" />
             <button
