@@ -42,7 +42,7 @@ function redirectPreservingCookies(
   return redirect;
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { supabase, response } = createSupabaseProxyClient(request);
 
   // Touching getUser() refreshes the session cookies if they're close to
