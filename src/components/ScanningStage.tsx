@@ -1,10 +1,13 @@
 "use client";
 
 import { Globe, Search, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
 
 interface ScanningStageProps {
   ideaSummary: string;
+  // 0 = generating queries, 1 = scanning web, 2 = analyzing. Driven by the
+  // parent so the indicator stays in sync with the actual network requests
+  // instead of running on a dumb 2.5 s timer that drifts from reality.
+  step?: number;
 }
 
 const STEPS = [
@@ -13,15 +16,11 @@ const STEPS = [
   { icon: Sparkles, label: "Scoring viability and drafting your build plan…" },
 ];
 
-export default function ScanningStage({ ideaSummary }: ScanningStageProps) {
-  const [active, setActive] = useState(0);
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      setActive((i) => (i < STEPS.length - 1 ? i + 1 : i));
-    }, 2500);
-    return () => clearInterval(id);
-  }, []);
+export default function ScanningStage({
+  ideaSummary,
+  step = 0,
+}: ScanningStageProps) {
+  const active = Math.min(step, STEPS.length - 1);
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-16 fade-in-up">

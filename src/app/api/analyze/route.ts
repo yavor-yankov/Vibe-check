@@ -1,21 +1,33 @@
 import { NextRequest } from "next/server";
+import { z } from "zod";
 import { getGeminiClient, modelForTier } from "@/lib/gemini";
 import { ANALYSIS_SYSTEM_PROMPT } from "@/lib/prompts";
 import { consumeUsage, refundUsage } from "@/lib/billing/usage";
 import type {
   AnalysisReport,
-  ChatMessage,
-  Competitor,
   ExpandedInsights,
 } from "@/lib/types";
 
 export const runtime = "nodejs";
 
-interface AnalyzeRequestBody {
-  messages: ChatMessage[];
-  ideaSummary: string;
-  competitors: Competitor[];
-}
+const CompetitorSchema = z.object({
+  title: z.string().max(300),
+  url: z.string().url(),
+  snippet: z.string().max(1000),
+});
+
+const ChatMessageSchema = z.object({
+  id: z.string(),
+  role: z.enum(["user", "assistant", "system"]),
+  content: z.string().max(8000),
+  createdAt: z.number(),
+});
+
+const AnalyzeRequestSchema = z.object({
+  messages: z.array(ChatMessageSchema).max(100),
+  ideaSummary: z.string().min(1).max(2000),
+  competitors: z.array(CompetitorSchema).max(20),
+});
 
 // Strip `insights` entirely if the model returned a malformed payload.
 // We'd rather render the original report cleanly than explode the UI on
@@ -156,19 +168,21 @@ function extractJson(raw: string): string {
 }
 
 export async function POST(request: NextRequest) {
-  let body: AnalyzeRequestBody;
+  let rawBody: unknown;
   try {
-    body = (await request.json()) as AnalyzeRequestBody;
+    rawBody = await request.json();
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const { messages, ideaSummary, competitors } = body;
-  if (!ideaSummary) {
+
+  const parsed = AnalyzeRequestSchema.safeParse(rawBody);
+  if (!parsed.success) {
     return Response.json(
-      { error: "ideaSummary is required" },
+      { error: parsed.error.issues[0]?.message ?? "Invalid request" },
       { status: 400 }
     );
   }
+  const { messages, ideaSummary, competitors } = parsed.data;
 
   // Resolve the Gemini client FIRST so a missing API key never burns a
   // quota slot. Only once we know the downstream call is reachable do we

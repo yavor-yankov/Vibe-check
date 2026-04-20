@@ -32,11 +32,17 @@ export default function Home() {
   const [isRedTeamLoading, setIsRedTeamLoading] = useState(false);
   const [redTeamError, setRedTeamError] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
+  // 0 = generating queries, 1 = searching web, 2 = analyzing
+  const [scanStep, setScanStep] = useState(0);
 
   // Keep a ref to the latest active session so async callbacks don't
   // act on stale closures (e.g. runRedTeam finishing after the user
   // switched sessions or hit "New check").
   const currentRef = useRef<Session | null>(null);
+
+  // AbortController for in-flight red-team requests so "Re-score" can
+  // cancel a pending red-team before it returns and overwrites fresh data.
+  const redTeamAbortRef = useRef<AbortController | null>(null);
   useEffect(() => {
     currentRef.current = current;
   }, [current]);
@@ -272,7 +278,8 @@ export default function Home() {
   ) => {
     const ideaSummary = scanning.ideaSummary ?? "";
     try {
-      // 1. search competitors
+      // Step 0 → 1: generate queries + search
+      setScanStep(0);
       const searchRes = await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -287,7 +294,8 @@ export default function Home() {
       }
       const competitors = searchData.competitors ?? [];
 
-      // 2. analyze
+      // Step 1 → 2: run AI analysis
+      setScanStep(1);
       const analyzeRes = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -297,6 +305,7 @@ export default function Home() {
           competitors,
         }),
       });
+      setScanStep(2);
       const analyzeData = (await analyzeRes.json()) as {
         report?: AnalysisReport;
         error?: string;
@@ -346,6 +355,9 @@ export default function Home() {
     if (!current) return;
     setError(null);
     resetRedTeamState();
+    // Abort any in-flight red-team so it can't land on top of the new report.
+    redTeamAbortRef.current?.abort();
+    redTeamAbortRef.current = null;
     const originalSummary = current.ideaSummary;
     const scanning: Session = {
       ...current,
@@ -363,6 +375,12 @@ export default function Home() {
     const generationAtStart = snapshot.reportGeneration ?? 0;
     setRedTeamError(null);
     setIsRedTeamLoading(true);
+
+    // Cancel any previous in-flight request before starting a new one.
+    redTeamAbortRef.current?.abort();
+    const controller = new AbortController();
+    redTeamAbortRef.current = controller;
+
     try {
       const res = await fetch("/api/redteam", {
         method: "POST",
@@ -373,6 +391,7 @@ export default function Home() {
           competitors: snapshot.competitors,
           report: snapshot.report,
         }),
+        signal: controller.signal,
       });
       const data = (await res.json()) as {
         redTeam?: RedTeamReport;
@@ -393,6 +412,9 @@ export default function Home() {
       const stillActive = currentRef.current?.id === sessionId;
       persist(updated, { updateCurrent: stillActive });
     } catch (err) {
+      // AbortError means the request was intentionally cancelled (e.g. user
+      // hit Re-score before this returned) — don't surface it as an error.
+      if (err instanceof Error && err.name === "AbortError") return;
       const live = currentRef.current;
       if (
         live?.id === sessionId &&
@@ -450,7 +472,7 @@ export default function Home() {
         )}
 
         {current.stage === "scanning" && (
-          <ScanningStage ideaSummary={current.ideaSummary ?? ""} />
+          <ScanningStage ideaSummary={current.ideaSummary ?? ""} step={scanStep} />
         )}
 
         {current.stage === "report" && current.report && (

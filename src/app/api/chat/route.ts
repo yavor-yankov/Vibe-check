@@ -1,19 +1,26 @@
 import { NextRequest } from "next/server";
+import { z } from "zod";
 import { getGeminiClient, modelForTier } from "@/lib/gemini";
 import { INTERVIEW_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
-import type { ChatMessage } from "@/lib/types";
 
 export const runtime = "nodejs";
 
-interface ChatRequestBody {
-  messages: ChatMessage[];
-}
+const ChatMessageSchema = z.object({
+  id: z.string(),
+  role: z.enum(["user", "assistant", "system"]),
+  content: z.string().max(8000),
+  createdAt: z.number(),
+});
+
+const ChatRequestSchema = z.object({
+  messages: z.array(ChatMessageSchema).min(1).max(100),
+});
 
 export async function POST(request: NextRequest) {
-  let body: ChatRequestBody;
+  let body: unknown;
   try {
-    body = (await request.json()) as ChatRequestBody;
+    body = await request.json();
   } catch {
     return new Response(
       JSON.stringify({ error: "Invalid JSON body" }),
@@ -21,13 +28,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const messages = body.messages ?? [];
-  if (!Array.isArray(messages) || messages.length === 0) {
+  const parsed = ChatRequestSchema.safeParse(body);
+  if (!parsed.success) {
     return new Response(
-      JSON.stringify({ error: "messages array is required" }),
+      JSON.stringify({ error: parsed.error.issues[0]?.message ?? "Invalid request" }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }
+
+  const { messages } = parsed.data;
 
   const plan = await getPlanSnapshot();
   if (!plan) {

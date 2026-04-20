@@ -96,8 +96,8 @@ export default function InterviewStage({
         </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
-        <div className="max-w-3xl mx-auto space-y-6">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6 pb-2">
+        <div className="max-w-3xl mx-auto space-y-6 pb-4">
           {messages.map((m) => (
             <Message key={m.id} message={m} />
           ))}

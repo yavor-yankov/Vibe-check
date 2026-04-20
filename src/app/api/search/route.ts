@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { z } from "zod";
 import { getGeminiClient, modelForTier } from "@/lib/gemini";
 import { SEARCH_QUERY_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
@@ -10,9 +11,9 @@ import type { Competitor } from "@/lib/types";
 
 export const runtime = "nodejs";
 
-interface SearchRequestBody {
-  ideaSummary: string;
-}
+const SearchRequestSchema = z.object({
+  ideaSummary: z.string().min(1).max(2000),
+});
 
 interface TavilyResult {
   title: string;
@@ -110,19 +111,21 @@ async function duckduckgoSearch(query: string): Promise<Competitor[]> {
 }
 
 export async function POST(request: NextRequest) {
-  let body: SearchRequestBody;
+  let body: unknown;
   try {
-    body = (await request.json()) as SearchRequestBody;
+    body = await request.json();
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const { ideaSummary } = body;
-  if (!ideaSummary || typeof ideaSummary !== "string") {
+
+  const parsed = SearchRequestSchema.safeParse(body);
+  if (!parsed.success) {
     return Response.json(
-      { error: "ideaSummary is required" },
+      { error: parsed.error.issues[0]?.message ?? "Invalid request" },
       { status: 400 }
     );
   }
+  const { ideaSummary } = parsed.data;
 
   const plan = await getPlanSnapshot();
   if (!plan) {

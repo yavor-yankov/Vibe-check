@@ -1,22 +1,31 @@
 import { NextRequest } from "next/server";
+import { z } from "zod";
 import { getGeminiClient, modelForTier } from "@/lib/gemini";
 import { RED_TEAM_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
-import type {
-  AnalysisReport,
-  ChatMessage,
-  Competitor,
-  RedTeamReport,
-} from "@/lib/types";
+import type { AnalysisReport, RedTeamReport } from "@/lib/types";
 
 export const runtime = "nodejs";
 
-interface RedTeamRequestBody {
-  ideaSummary: string;
-  messages?: ChatMessage[];
-  competitors?: Competitor[];
-  report?: AnalysisReport | null;
-}
+const CompetitorSchema = z.object({
+  title: z.string().max(300),
+  url: z.string().url(),
+  snippet: z.string().max(1000),
+});
+
+const ChatMessageSchema = z.object({
+  id: z.string(),
+  role: z.enum(["user", "assistant", "system"]),
+  content: z.string().max(8000),
+  createdAt: z.number(),
+});
+
+const RedTeamRequestSchema = z.object({
+  ideaSummary: z.string().min(1).max(2000),
+  messages: z.array(ChatMessageSchema).max(100).optional(),
+  competitors: z.array(CompetitorSchema).max(20).optional(),
+  report: z.unknown().optional(),
+});
 
 function extractJson(raw: string): string {
   const trimmed = raw.trim();
@@ -31,19 +40,24 @@ function extractJson(raw: string): string {
 }
 
 export async function POST(request: NextRequest) {
-  let body: RedTeamRequestBody;
+  let rawBody: unknown;
   try {
-    body = (await request.json()) as RedTeamRequestBody;
+    rawBody = await request.json();
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const { ideaSummary, messages, competitors, report } = body;
-  if (!ideaSummary) {
+
+  const parsed = RedTeamRequestSchema.safeParse(rawBody);
+  if (!parsed.success) {
     return Response.json(
-      { error: "ideaSummary is required" },
+      { error: parsed.error.issues[0]?.message ?? "Invalid request" },
       { status: 400 }
     );
   }
+  const { ideaSummary, messages, competitors } = parsed.data;
+  // report is passed through as opaque context for the LLM prompt; we only
+  // access known fields so cast it to AnalysisReport for convenience.
+  const report = (parsed.data.report ?? null) as AnalysisReport | null;
 
   // Red-team doesn't consume monthly quota — it's part of the same
   // vibe check that /api/analyze already charged. But we still need the
