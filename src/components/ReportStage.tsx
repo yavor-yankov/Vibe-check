@@ -11,6 +11,7 @@ import {
   Flame,
   Globe,
   Layers,
+  Mail,
   Map,
   Pencil,
   RotateCcw,
@@ -23,6 +24,7 @@ import type { AnalysisReport, Competitor, Persona, RedTeamReport } from "@/lib/t
 import InsightsPanel from "./InsightsPanel";
 
 interface ReportStageProps {
+  sessionId: string;
   report: AnalysisReport;
   competitors: Competitor[];
   ideaSummary: string;
@@ -209,6 +211,7 @@ function WordDiff({
 }
 
 export default function ReportStage({
+  sessionId,
   report,
   competitors,
   ideaSummary,
@@ -228,6 +231,7 @@ export default function ReportStage({
   const [refineDraft, setRefineDraft] = useState(ideaSummary);
   const [redTeamOpen, setRedTeamOpen] = useState(false);
   const [personasOpen, setPersonasOpen] = useState(false);
+  const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
 
   function handleExportPdf() {
     const original = document.title;
@@ -327,6 +331,19 @@ export default function ReportStage({
     URL.revokeObjectURL(url);
   }
 
+  async function handleEmailReport() {
+    setEmailStatus("sending");
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/email`, { method: "POST" });
+      if (!res.ok) throw new Error();
+      setEmailStatus("sent");
+      setTimeout(() => setEmailStatus("idle"), 3000);
+    } catch {
+      setEmailStatus("error");
+      setTimeout(() => setEmailStatus("idle"), 3000);
+    }
+  }
+
   function submitRefine() {
     const trimmed = refineDraft.trim();
     if (!trimmed || trimmed === ideaSummary.trim()) return;
@@ -372,6 +389,15 @@ export default function ReportStage({
           >
             <FileText size={14} />
             Markdown
+          </button>
+          <button
+            onClick={handleEmailReport}
+            disabled={emailStatus === "sending"}
+            className="inline-flex items-center gap-2 rounded-lg border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[color:var(--card)] transition disabled:opacity-40"
+            title="Email this report to yourself"
+          >
+            <Mail size={14} />
+            {emailStatus === "sending" ? "Sending…" : emailStatus === "sent" ? "Sent!" : emailStatus === "error" ? "Failed" : "Email"}
           </button>
           <button
             onClick={() => {

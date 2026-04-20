@@ -624,6 +624,7 @@ export default function Home() {
           <div className="flex-1 overflow-y-auto">
             <ReportStage
               key={current.id}
+              sessionId={current.id}
               report={current.report}
               competitors={current.competitors}
               ideaSummary={current.ideaSummary ?? ""}
