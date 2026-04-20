@@ -1,6 +1,6 @@
 "use client";
 
-import { Menu, Plus, Search, Sparkles, Trash2, X } from "lucide-react";
+import { GitCompareArrows, Menu, Plus, Search, Sparkles, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useState, useMemo } from "react";
 import type { Session } from "@/lib/types";
@@ -13,6 +13,7 @@ interface SidebarProps {
   onNew: () => void;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
+  onCompare?: (ids: string[]) => void;
   /** Mobile only — controls whether the drawer is open. */
   isOpen?: boolean;
   /** Mobile only — called when the overlay or close button is clicked. */
@@ -63,6 +64,7 @@ export default function Sidebar({
   onNew,
   onSelect,
   onDelete,
+  onCompare,
   isOpen = false,
   onClose,
   onOpen,
@@ -70,6 +72,8 @@ export default function Sidebar({
 }: SidebarProps) {
   const [query, setQuery] = useState("");
   const [verdictFilter, setVerdictFilter] = useState<VerdictFilter>("all");
+  const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
+  const compareMode = compareIds.size > 0;
 
   const handleSelect = (id: string) => {
     onSelect(id);
@@ -183,6 +187,44 @@ export default function Sidebar({
           New vibe check
         </button>
 
+        {/* Compare mode toggle */}
+        {sessions.filter((s) => s.report).length >= 2 && (
+          <div className="mx-4 mt-2 flex items-center gap-2">
+            {compareMode ? (
+              <>
+                <button
+                  onClick={() => {
+                    if (compareIds.size >= 2 && onCompare) {
+                      onCompare(Array.from(compareIds));
+                      setCompareIds(new Set());
+                    }
+                  }}
+                  disabled={compareIds.size < 2}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-[color:var(--accent)] text-white py-2 px-3 text-xs font-medium hover:brightness-110 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <GitCompareArrows size={14} />
+                  Compare {compareIds.size} ideas
+                </button>
+                <button
+                  onClick={() => setCompareIds(new Set())}
+                  className="rounded-lg border border-[color:var(--border)] py-2 px-3 text-xs text-[color:var(--muted)] hover:text-[color:var(--foreground)] transition"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setCompareIds(new Set())}
+                className="w-full flex items-center justify-center gap-2 rounded-lg border border-[color:var(--border)] py-2 px-3 text-xs text-[color:var(--muted)] hover:text-[color:var(--foreground)] hover:border-[color:var(--accent)] transition"
+              >
+                <GitCompareArrows size={13} />
+                Compare ideas
+              </button>
+            )}
+          </div>
+        )}
+        </button>
+
         {/* ── Idea Library search + filters ── */}
         <div className="px-3 pt-4 pb-2 space-y-2">
           {/* Search box */}
@@ -256,12 +298,34 @@ export default function Sidebar({
                 <li key={s.id}>
                   <div
                     className={`group flex items-start gap-2 rounded-lg px-3 py-2 cursor-pointer transition ${
-                      s.id === activeId
-                        ? "bg-[color:var(--background)] border border-[color:var(--border)]"
-                        : "hover:bg-[color:var(--background)]"
+                      compareIds.has(s.id)
+                        ? "bg-[color:var(--accent)]/5 border border-[color:var(--accent)]/30"
+                        : s.id === activeId
+                          ? "bg-[color:var(--background)] border border-[color:var(--border)]"
+                          : "hover:bg-[color:var(--background)]"
                     }`}
-                    onClick={() => handleSelect(s.id)}
+                    onClick={() => {
+                      if (compareMode && s.report) {
+                        setCompareIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(s.id)) next.delete(s.id);
+                          else if (next.size < 4) next.add(s.id);
+                          return next;
+                        });
+                      } else {
+                        handleSelect(s.id);
+                      }
+                    }}
                   >
+                    {compareMode && (
+                      <input
+                        type="checkbox"
+                        checked={compareIds.has(s.id)}
+                        disabled={!s.report}
+                        readOnly
+                        className="mt-1 shrink-0 accent-[color:var(--accent)]"
+                      />
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">
                         {s.title || "Untitled"}

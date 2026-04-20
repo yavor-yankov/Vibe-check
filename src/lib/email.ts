@@ -177,3 +177,62 @@ export async function sendMagicLinkEmail(
 
   log.info({ to }, "Magic link email sent via Resend");
 }
+
+export async function sendReportEmail(
+  to: string,
+  reportUrl: string,
+  verdict: string,
+  verdictLabel: string,
+  overallScore: number,
+  summary: string
+): Promise<void> {
+  const resend = getResend();
+
+  const scoreColor = overallScore >= 7.5 ? "#10b981" : overallScore >= 5 ? "#f59e0b" : "#ef4444";
+
+  const html = `
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"/></head>
+<body style="margin:0;padding:0;background:#fafaf9;font-family:system-ui,-apple-system,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#fafaf9;padding:40px 20px;">
+<tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;border:1px solid #e4e4e7;overflow:hidden;">
+  <tr><td style="padding:32px 32px 0;">
+    <div style="color:#f97316;font-size:12px;font-weight:600;margin-bottom:8px;">VIBE CHECK REPORT</div>
+    <h1 style="margin:0 0 8px;font-size:24px;color:#18181b;">${verdictLabel}</h1>
+    <p style="margin:0 0 20px;color:#71717a;font-size:14px;line-height:1.5;">${summary}</p>
+  </td></tr>
+  <tr><td style="padding:0 32px 24px;">
+    <div style="display:inline-block;padding:6px 16px;border-radius:999px;background:${scoreColor};color:#fff;font-size:14px;font-weight:600;">
+      Score: ${overallScore.toFixed(1)}/10
+    </div>
+  </td></tr>
+  <tr><td style="padding:0 32px 32px;">
+    <a href="${reportUrl}" style="display:inline-block;padding:12px 24px;background:#f97316;color:#fff;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600;">
+      View full report
+    </a>
+  </td></tr>
+  <tr><td style="padding:16px 32px;border-top:1px solid #e4e4e7;color:#a1a1aa;font-size:11px;">
+    Sent by Vibe Check &mdash; AI startup idea validator
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+
+  const text = `Vibe Check Report: ${verdictLabel}\n\nScore: ${overallScore.toFixed(1)}/10\n\n${summary}\n\nView full report: ${reportUrl}`;
+
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to,
+    subject: `Vibe Check: ${verdictLabel} (${overallScore.toFixed(1)}/10)`,
+    html,
+    text,
+  });
+
+  if (error) {
+    log.error({ err: error, to }, "Failed to send report email");
+    throw new Error(`Email delivery failed: ${error.message}`);
+  }
+
+  log.info({ to }, "Report email sent");
+}

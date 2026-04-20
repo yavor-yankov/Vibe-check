@@ -159,6 +159,20 @@ export interface Persona {
   objection: string;
 }
 
+export type DomainExpertise = "none" | "some" | "deep";
+export type TechnicalAbility = "non-technical" | "can-code" | "senior-engineer";
+export type Runway = "side-project" | "3-months" | "6-months-plus";
+export type TimeCommitment = "nights-weekends" | "part-time" | "full-time";
+export type PriorExperience = "first-time" | "one-prior" | "serial";
+
+export interface FounderProfile {
+  domainExpertise: DomainExpertise;
+  technicalAbility: TechnicalAbility;
+  runway: Runway;
+  timeCommitment: TimeCommitment;
+  priorExperience: PriorExperience;
+}
+
 export type WizardStage = "intro" | "interview" | "scanning" | "report";
 
 export interface Session {
@@ -171,6 +185,7 @@ export interface Session {
   competitors: Competitor[];
   report: AnalysisReport | null;
   ideaSummary?: string;
+  founderProfile?: FounderProfile;
   redTeamReport?: RedTeamReport | null;
   // Monotonic counter bumped on every successful analyze/refine. Used by
   // runRedTeam to detect a concurrent refine and avoid merging a stale

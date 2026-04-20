@@ -205,7 +205,7 @@ export async function POST(request: NextRequest) {
 
   const parsed = parseBody(AnalyzeBodySchema, raw);
   if (!parsed.ok) return parsed.response;
-  const { messages, ideaSummary, competitors } = parsed.data;
+  const { messages, ideaSummary, competitors, founderProfile } = parsed.data;
 
   // Resolve the Gemini client FIRST so a missing API key never burns a
   // quota slot. Only once we know the downstream call is reachable do we
@@ -265,7 +265,11 @@ export async function POST(request: NextRequest) {
           .join("\n")
       : "(no competitors found via web search)";
 
-  const userPrompt = `# Idea summary\n${ideaSummary}\n\n# Interview transcript\n${transcript}\n\n# Competitors found on the web\n${competitorBlock}\n\nReturn ONLY the JSON described in your instructions.`;
+  const founderBlock = founderProfile
+    ? `# Founder profile\n- Domain expertise: ${founderProfile.domainExpertise}\n- Technical ability: ${founderProfile.technicalAbility}\n- Runway: ${founderProfile.runway}\n- Time commitment: ${founderProfile.timeCommitment}\n- Prior startup experience: ${founderProfile.priorExperience}\n\nTailor the tech stack complexity, timeline estimates, and build effort to this founder's profile.`
+    : "";
+
+  const userPrompt = `# Idea summary\n${ideaSummary}\n\n# Interview transcript\n${transcript}\n\n# Competitors found on the web\n${competitorBlock}${founderBlock ? `\n\n${founderBlock}` : ""}\n\nReturn ONLY the JSON described in your instructions.`;
 
   const model = client.getGenerativeModel({
     model: modelForTier(plan.tier),
