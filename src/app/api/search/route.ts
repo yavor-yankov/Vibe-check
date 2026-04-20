@@ -3,7 +3,6 @@ import { logger } from "@/lib/logger";
 
 const log = logger.child({ route: "/api/search" });
 import { getGeminiClient, modelForTier } from "@/lib/gemini";
-import { SEARCH_QUERY_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import {
   readCachedSearch,
@@ -28,13 +27,15 @@ interface TavilyResponse {
 
 async function generateSearchQueries(
   ideaSummary: string,
-  modelName: string
+  modelName: string,
+  count: number = 3
 ): Promise<string[]> {
   try {
     const client = getGeminiClient();
+    const prompt = `You are a search query generator. Given a product idea summary, output ${count} short, high-signal web search queries (max 8 words each) that would surface existing competitor apps or similar products. Focus on product names/categories, not features. Return ONLY a JSON array of strings, no other text. Example: ["AI habit tracker app", "habit streak mobile app"]`;
     const model = client.getGenerativeModel({
       model: modelName,
-      systemInstruction: SEARCH_QUERY_SYSTEM_PROMPT,
+      systemInstruction: prompt,
     });
     const result = await model.generateContent(ideaSummary);
     const raw = result.response.text().trim();
@@ -42,7 +43,7 @@ async function generateSearchQueries(
     const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "");
     const parsed = JSON.parse(cleaned);
     if (Array.isArray(parsed) && parsed.every((q) => typeof q === "string")) {
-      return parsed.slice(0, 3);
+      return parsed.slice(0, count);
     }
   } catch {
     // fall through to fallback
@@ -133,9 +134,12 @@ export async function POST(request: NextRequest) {
   const rl = await checkRateLimit(plan.userId);
   if (rl && !rl.success) return rateLimitExceededResponse(rl.reset);
 
+  // Free tier: 2 queries to reduce Tavily cost; Pro/Lifetime: 3 queries.
+  const queryCount = plan.tier === "free" ? 2 : 3;
   const queries = await generateSearchQueries(
     ideaSummary,
-    modelForTier(plan.tier)
+    modelForTier(plan.tier),
+    queryCount
   );
   const tavilyKey = process.env.TAVILY_API_KEY;
 

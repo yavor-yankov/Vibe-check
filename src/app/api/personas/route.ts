@@ -1,13 +1,15 @@
 import { NextRequest } from "next/server";
 import { getGeminiClient, modelForTier } from "@/lib/gemini";
-import { RED_TEAM_SYSTEM_PROMPT } from "@/lib/prompts";
+import { PERSONA_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { RedTeamBodySchema, parseBody } from "@/lib/validation";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
-import type { RedTeamReport } from "@/lib/types";
+import type { Persona } from "@/lib/types";
 
 export const runtime = "nodejs";
+
+const log = logger.child({ route: "/api/personas" });
 
 function extractJson(raw: string): string {
   const trimmed = raw.trim();
@@ -29,19 +31,16 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
+  // Reuse RedTeamBodySchema — same shape (ideaSummary + messages + competitors + report)
   const parsed = parseBody(RedTeamBodySchema, raw);
   if (!parsed.ok) return parsed.response;
-  const { ideaSummary, messages, competitors, report } = parsed.data;
+  const { ideaSummary, messages, competitors } = parsed.data;
 
-  // Red-team doesn't consume monthly quota — it's part of the same
-  // vibe check that /api/analyze already charged. But we still need the
-  // plan to pick the right model, and we 401 if somehow unauthenticated.
   const plan = await getPlanSnapshot();
   if (!plan) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  // Rate limiting — 20 req/min per user. Disabled when Upstash env vars absent.
   const rl = await checkRateLimit(plan.userId);
   if (rl && !rl.success) return rateLimitExceededResponse(rl.reset);
 
@@ -59,37 +58,36 @@ export async function POST(request: NextRequest) {
 
   const competitorBlock =
     competitors && competitors.length > 0
-      ? competitors
-          .map((c, i) => `${i + 1}. ${c.title} — ${c.url}`)
-          .join("\n")
-      : "(no competitors found via web search)";
+      ? competitors.map((c, i) => `${i + 1}. ${c.title} — ${c.url}`).join("\n")
+      : "(no competitors found)";
 
-  const reportBlock = report
-    ? `Prior constructive verdict: ${report.verdict} — ${report.verdictLabel}\nKnown risks already surfaced:\n${(report.risks ?? []).map((r) => `- ${r}`).join("\n")}`
-    : "(no prior analysis report)";
-
-  const userPrompt = `# Idea summary\n${ideaSummary}\n\n# Interview transcript\n${transcript || "(no transcript)"}\n\n# Competitors found on the web\n${competitorBlock}\n\n# Prior analysis context\n${reportBlock}\n\nReturn ONLY the JSON described in your instructions. Focus on specific, concrete failure modes — not generic platitudes. Do not repeat risks already listed above unless you're sharpening them with a new angle.`;
+  const userPrompt = `# Idea summary\n${ideaSummary}\n\n# Interview transcript\n${transcript || "(no transcript)"}\n\n# Competitors\n${competitorBlock}\n\nGenerate 3-5 realistic user personas who would encounter this product. Return ONLY the JSON.`;
 
   const model = client.getGenerativeModel({
     model: modelForTier(plan.tier),
-    systemInstruction: RED_TEAM_SYSTEM_PROMPT,
+    systemInstruction: PERSONA_SYSTEM_PROMPT,
     generationConfig: {
       responseMimeType: "application/json",
-      temperature: 0.8,
+      temperature: 0.9,
     },
   });
 
   try {
     const result = await model.generateContent(userPrompt);
-    const raw = result.response.text();
-    const jsonStr = extractJson(raw);
-    const redTeam = JSON.parse(jsonStr) as RedTeamReport;
-    return Response.json({ redTeam });
+    const rawText = result.response.text();
+    const jsonStr = extractJson(rawText);
+    const data = JSON.parse(jsonStr) as { personas?: Persona[] };
+    const personas = (data.personas ?? []).filter(
+      (p): p is Persona =>
+        typeof p.name === "string" &&
+        typeof p.role === "string" &&
+        typeof p.quote === "string"
+    );
+    return Response.json({ personas });
   } catch (err) {
-    const log = logger.child({ route: "redteam" });
-    log.error({ err }, "Red-team pass failed");
+    log.error({ err }, "Persona simulation failed");
     return Response.json(
-      { error: "Failed to run red-team analysis. Please try again." },
+      { error: "Failed to generate personas. Please try again." },
       { status: 500 }
     );
   }

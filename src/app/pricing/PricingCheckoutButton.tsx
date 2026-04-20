@@ -39,6 +39,19 @@ export default function PricingCheckoutButton({
         setLoading(false);
         return;
       }
+      // Only redirect to trusted Stripe domains or same-origin
+      try {
+        const parsed = new URL(data.url);
+        if (!parsed.hostname.endsWith(".stripe.com") && parsed.origin !== window.location.origin) {
+          setError("Untrusted redirect URL");
+          setLoading(false);
+          return;
+        }
+      } catch {
+        setError("Invalid checkout URL");
+        setLoading(false);
+        return;
+      }
       window.location.href = data.url;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Checkout failed");

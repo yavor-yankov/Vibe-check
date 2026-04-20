@@ -7,7 +7,7 @@ import { checkRateLimit, rateLimitExceededResponse } from "@/lib/rate-limit";
 import { fireWebhook } from "@/lib/webhooks";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { logger } from "@/lib/logger";
-import type { AnalysisReport, ExpandedInsights } from "@/lib/types";
+import type { ActionPlanWeek, AnalysisReport, ExpandedInsights, LeanCanvasEntry, NextStep } from "@/lib/types";
 
 const log = logger.child({ route: "/api/analyze" });
 
@@ -118,6 +118,9 @@ function sanitizeInsights(
   return {
     marketSize: {
       range: ms.range,
+      tam: typeof ms.tam === "string" ? ms.tam : undefined,
+      sam: typeof ms.sam === "string" ? ms.sam : undefined,
+      som: typeof ms.som === "string" ? ms.som : undefined,
       confidence,
       reasoning: ms.reasoning,
     },
@@ -134,7 +137,48 @@ function sanitizeInsights(
     },
     regulatoryFlags,
     pricingBenchmarks,
+    leanCanvas: sanitizeLeanCanvas(raw),
+    nextSteps: sanitizeNextSteps(raw),
+    actionPlan: sanitizeActionPlan(raw),
   };
+}
+
+function sanitizeLeanCanvas(raw: Record<string, unknown>): LeanCanvasEntry[] | undefined {
+  const lc = raw.leanCanvas;
+  if (!Array.isArray(lc)) return undefined;
+  const valid = lc.filter(
+    (e): e is { section: string; content: string } =>
+      typeof e === "object" && e !== null &&
+      typeof (e as Record<string, unknown>).section === "string" &&
+      typeof (e as Record<string, unknown>).content === "string"
+  );
+  return valid.length > 0 ? valid.slice(0, 9) : undefined;
+}
+
+function sanitizeNextSteps(raw: Record<string, unknown>): NextStep[] | undefined {
+  const ns = raw.nextSteps;
+  if (!Array.isArray(ns)) return undefined;
+  const valid = ns.filter(
+    (e): e is NextStep =>
+      typeof e === "object" && e !== null &&
+      typeof (e as Record<string, unknown>).description === "string" &&
+      typeof (e as Record<string, unknown>).channel === "string" &&
+      typeof (e as Record<string, unknown>).metric === "string"
+  );
+  return valid.length > 0 ? valid.slice(0, 5) : undefined;
+}
+
+function sanitizeActionPlan(raw: Record<string, unknown>): ActionPlanWeek[] | undefined {
+  const ap = raw.actionPlan;
+  if (!Array.isArray(ap)) return undefined;
+  const valid = ap.filter(
+    (e): e is ActionPlanWeek =>
+      typeof e === "object" && e !== null &&
+      typeof (e as Record<string, unknown>).week === "string" &&
+      typeof (e as Record<string, unknown>).goal === "string" &&
+      Array.isArray((e as Record<string, unknown>).tasks)
+  );
+  return valid.length > 0 ? valid.slice(0, 8) : undefined;
 }
 
 function extractJson(raw: string): string {
@@ -274,9 +318,9 @@ export async function POST(request: NextRequest) {
     // Analysis failed after we already charged the user — roll the slot
     // back so transient Gemini errors don't eat free-tier quota.
     await refundUsage(plan.userId, plan.usageMonth);
-    const msg = err instanceof Error ? err.message : "analysis failed";
+    log.error({ err }, "Analysis generation failed");
     return Response.json(
-      { error: `Failed to generate analysis: ${msg}` },
+      { error: "Failed to generate analysis. Please try again." },
       { status: 500 }
     );
   }

@@ -2,7 +2,10 @@
 
 import {
   Banknote,
+  CalendarDays,
+  FlaskConical,
   Gauge,
+  LayoutGrid,
   Scale,
   Skull,
   TrendingUp,
@@ -108,6 +111,28 @@ export default function InsightsPanel({
             <div className="text-2xl font-semibold">{marketSize.range}</div>
             <ConfidencePill confidence={marketSize.confidence} />
           </div>
+          {(marketSize.tam || marketSize.sam || marketSize.som) && (
+            <div className="grid grid-cols-3 gap-2 mb-2">
+              {marketSize.tam && (
+                <div className="rounded-lg bg-[color:var(--background)] p-2 text-center">
+                  <div className="text-[10px] uppercase tracking-wider text-[color:var(--muted)] font-medium">TAM</div>
+                  <div className="text-sm font-semibold">{marketSize.tam}</div>
+                </div>
+              )}
+              {marketSize.sam && (
+                <div className="rounded-lg bg-[color:var(--background)] p-2 text-center">
+                  <div className="text-[10px] uppercase tracking-wider text-[color:var(--muted)] font-medium">SAM</div>
+                  <div className="text-sm font-semibold">{marketSize.sam}</div>
+                </div>
+              )}
+              {marketSize.som && (
+                <div className="rounded-lg bg-[color:var(--background)] p-2 text-center">
+                  <div className="text-[10px] uppercase tracking-wider text-[color:var(--muted)] font-medium">SOM</div>
+                  <div className="text-sm font-semibold">{marketSize.som}</div>
+                </div>
+              )}
+            </div>
+          )}
           <p className="text-sm text-[color:var(--muted)]">
             {marketSize.reasoning}
           </p>
@@ -252,6 +277,75 @@ export default function InsightsPanel({
                 ))}
               </tbody>
             </table>
+          </div>
+        </Card>
+      )}
+
+      {/* ── Lean Canvas ── */}
+      {insights.leanCanvas && insights.leanCanvas.length > 0 && (
+        <Card icon={<LayoutGrid size={18} />} title="Lean Canvas">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            {insights.leanCanvas.map((entry) => (
+              <div
+                key={entry.section}
+                className="rounded-lg border border-[color:var(--border)] bg-[color:var(--background)] p-3"
+              >
+                <div className="text-[10px] uppercase tracking-wider text-[color:var(--accent)] font-semibold mb-1">
+                  {entry.section}
+                </div>
+                <div className="text-xs text-[color:var(--foreground)] leading-relaxed">
+                  {entry.content}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* ── Next Steps / Experiments ── */}
+      {insights.nextSteps && insights.nextSteps.length > 0 && (
+        <Card icon={<FlaskConical size={18} />} title="Validate now — 3 experiments">
+          <div className="space-y-3">
+            {insights.nextSteps.map((step, i) => (
+              <div
+                key={i}
+                className="rounded-lg border border-[color:var(--border)] bg-[color:var(--background)] p-3"
+              >
+                <div className="text-sm font-medium mb-1">{step.description}</div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-[color:var(--muted)]">
+                  <div><span className="font-medium text-[color:var(--foreground)]">Channel:</span> {step.channel}</div>
+                  <div><span className="font-medium text-[color:var(--foreground)]">Metric:</span> {step.metric}</div>
+                  <div><span className="font-medium text-[color:var(--foreground)]">Success:</span> {step.successCriteria}</div>
+                  <div><span className="font-medium text-[color:var(--foreground)]">Timeframe:</span> {step.timeframe}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* ── 90-Day Action Plan ── */}
+      {insights.actionPlan && insights.actionPlan.length > 0 && (
+        <Card icon={<CalendarDays size={18} />} title="90-day action plan">
+          <div className="space-y-3">
+            {insights.actionPlan.map((week, i) => (
+              <div key={i} className="flex gap-3">
+                <div className="shrink-0 w-20 text-xs font-semibold text-[color:var(--accent)] pt-0.5">
+                  {week.week}
+                </div>
+                <div className="flex-1">
+                  <div className="text-sm font-medium mb-1">{week.goal}</div>
+                  <ul className="text-xs text-[color:var(--muted)] space-y-0.5">
+                    {week.tasks.map((task, j) => (
+                      <li key={j} className="flex gap-1.5">
+                        <span className="text-[color:var(--accent)] mt-0.5">-</span>
+                        <span>{task}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            ))}
           </div>
         </Card>
       )}

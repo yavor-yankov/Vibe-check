@@ -8,10 +8,12 @@ import InterviewStage, {
 } from "@/components/InterviewStage";
 import ScanningStage from "@/components/ScanningStage";
 import ReportStage from "@/components/ReportStage";
+import ReportSkeleton from "@/components/ReportSkeleton";
 import Sidebar from "@/components/Sidebar";
 import type {
   AnalysisReport,
   ChatMessage,
+  Persona,
   RedTeamReport,
   Session,
 } from "@/lib/types";
@@ -31,6 +33,9 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [isRedTeamLoading, setIsRedTeamLoading] = useState(false);
   const [redTeamError, setRedTeamError] = useState<string | null>(null);
+  const [personas, setPersonas] = useState<Persona[] | null>(null);
+  const [isPersonasLoading, setIsPersonasLoading] = useState(false);
+  const [personasError, setPersonasError] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
   // Mobile sidebar drawer state
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -148,11 +153,18 @@ export default function Home() {
     setRedTeamError(null);
   };
 
+  const resetPersonasState = () => {
+    setPersonas(null);
+    setIsPersonasLoading(false);
+    setPersonasError(null);
+  };
+
   const handleNew = () => {
     const s = newSession();
     setCurrent(s);
     setError(null);
     resetRedTeamState();
+    resetPersonasState();
   };
 
   const handleSelect = (id: string) => {
@@ -161,6 +173,7 @@ export default function Home() {
       setCurrent(s);
       setError(null);
       resetRedTeamState();
+      resetPersonasState();
     }
   };
 
@@ -174,6 +187,7 @@ export default function Home() {
       if (current?.id === id) {
         setCurrent(next[0] ?? newSession());
         resetRedTeamState();
+        resetPersonasState();
       }
       return next;
     });
@@ -227,11 +241,14 @@ export default function Home() {
   const streamAssistantReply = async (sessionWithUser: Session) => {
     setIsStreaming(true);
     setError(null);
+    const chatAbort = new AbortController();
+    const chatTimeout = setTimeout(() => chatAbort.abort(), 60_000);
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: sessionWithUser.messages }),
+        signal: chatAbort.signal,
       });
       if (!res.ok || !res.body) {
         const msg = await res.text().catch(() => "");
@@ -296,9 +313,14 @@ export default function Home() {
         })();
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Unknown error";
-      setError(msg);
+      if ((err as Error)?.name === "AbortError") {
+        setError("Chat request timed out. Please try again.");
+      } else {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        setError(msg);
+      }
     } finally {
+      clearTimeout(chatTimeout);
       setIsStreaming(false);
     }
   };
@@ -399,6 +421,7 @@ export default function Home() {
     if (!current) return;
     setError(null);
     resetRedTeamState();
+    resetPersonasState();
     const originalSummary = current.ideaSummary;
     const scanning: Session = {
       ...current,
@@ -416,6 +439,8 @@ export default function Home() {
     const generationAtStart = snapshot.reportGeneration ?? 0;
     setRedTeamError(null);
     setIsRedTeamLoading(true);
+    const rtAbort = new AbortController();
+    const rtTimeout = setTimeout(() => rtAbort.abort(), 45_000);
     try {
       const res = await fetch("/api/redteam", {
         method: "POST",
@@ -426,6 +451,7 @@ export default function Home() {
           competitors: snapshot.competitors,
           report: snapshot.report,
         }),
+        signal: rtAbort.signal,
       });
       const data = (await res.json()) as {
         redTeam?: RedTeamReport;
@@ -451,10 +477,16 @@ export default function Home() {
         live?.id === sessionId &&
         (live.reportGeneration ?? 0) === generationAtStart
       ) {
-        const msg = err instanceof Error ? err.message : "Unknown error";
+        const msg =
+          (err as Error)?.name === "AbortError"
+            ? "Red-team request timed out. Please try again."
+            : err instanceof Error
+              ? err.message
+              : "Unknown error";
         setRedTeamError(msg);
       }
     } finally {
+      clearTimeout(rtTimeout);
       const live = currentRef.current;
       if (
         live?.id === sessionId &&
@@ -465,12 +497,46 @@ export default function Home() {
     }
   };
 
+  const runPersonas = async () => {
+    const snapshot = currentRef.current;
+    if (!snapshot || !snapshot.report) return;
+    setPersonasError(null);
+    setIsPersonasLoading(true);
+    const abort = new AbortController();
+    const timeout = setTimeout(() => abort.abort(), 30_000);
+    try {
+      const res = await fetch("/api/personas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ideaSummary: snapshot.ideaSummary ?? "",
+          messages: snapshot.messages,
+          competitors: snapshot.competitors,
+          report: snapshot.report,
+        }),
+        signal: abort.signal,
+      });
+      const data = (await res.json()) as { personas?: Persona[]; error?: string };
+      if (!res.ok || !data.personas) {
+        throw new Error(data.error || "Persona simulation failed");
+      }
+      setPersonas(data.personas);
+    } catch (err) {
+      const msg =
+        (err as Error)?.name === "AbortError"
+          ? "Persona request timed out. Please try again."
+          : err instanceof Error
+            ? err.message
+            : "Unknown error";
+      setPersonasError(msg);
+    } finally {
+      clearTimeout(timeout);
+      setIsPersonasLoading(false);
+    }
+  };
+
   if (!isHydrated || !current) {
-    return (
-      <div className="flex-1 grid place-items-center text-[color:var(--muted)]">
-        Loading…
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (
@@ -532,6 +598,12 @@ export default function Home() {
           </div>
         )}
 
+        {current.stage === "report" && !current.report && (
+          <div className="flex-1 overflow-y-auto">
+            <ReportSkeleton />
+          </div>
+        )}
+
         {current.stage === "report" && current.report && (
           <div className="flex-1 overflow-y-auto">
             <ReportStage
@@ -542,9 +614,13 @@ export default function Home() {
               redTeamReport={current.redTeamReport ?? null}
               isRedTeamLoading={isRedTeamLoading}
               redTeamError={redTeamError}
+              personas={personas}
+              isPersonasLoading={isPersonasLoading}
+              personasError={personasError}
               onRestart={handleNew}
               onRefine={refineAnalysis}
               onRedTeam={runRedTeam}
+              onPersonas={runPersonas}
             />
           </div>
         )}
@@ -598,4 +674,40 @@ async function migrateLocalStorageIfNeeded(
   }
   migrated.sort((a, b) => b.updatedAt - a.updatedAt);
   return migrated;
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard skeleton — shown on first load while sessions hydrate from Postgres
+// ---------------------------------------------------------------------------
+function DashboardSkeleton() {
+  return (
+    <div className="flex h-screen overflow-hidden">
+      {/* Sidebar skeleton */}
+      <aside className="hidden md:flex flex-col w-64 shrink-0 border-r border-[color:var(--border)] bg-[color:var(--card)] p-4 gap-4">
+        <div className="skeleton h-6 w-32" />
+        <div className="skeleton h-9 w-full rounded-lg" style={{ animationDelay: "0.05s" }} />
+        <div className="flex-1 space-y-2 mt-2">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="skeleton h-10 w-full rounded-lg" style={{ animationDelay: `${0.1 + i * 0.07}s` }} />
+          ))}
+        </div>
+        <div className="skeleton h-[72px] w-full rounded-lg" style={{ animationDelay: "0.4s" }} />
+      </aside>
+
+      {/* Main area — mirrors IntroStage layout */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="max-w-2xl mx-auto px-6 py-16 space-y-4">
+          <div className="skeleton h-3 w-24" />
+          <div className="skeleton h-9 w-3/4" style={{ animationDelay: "0.05s" }} />
+          <div className="skeleton h-4 w-full" style={{ animationDelay: "0.1s" }} />
+          <div className="skeleton h-4 w-4/5" style={{ animationDelay: "0.15s" }} />
+          <div className="skeleton h-32 w-full rounded-xl mt-4" style={{ animationDelay: "0.2s" }} />
+          <div className="flex gap-3 mt-2">
+            <div className="skeleton h-10 w-32 rounded-lg" style={{ animationDelay: "0.25s" }} />
+            <div className="skeleton h-10 w-24 rounded-lg" style={{ animationDelay: "0.3s" }} />
+          </div>
+        </div>
+      </main>
+    </div>
+  );
 }

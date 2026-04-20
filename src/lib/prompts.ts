@@ -53,6 +53,9 @@ Respond with ONLY valid JSON (no markdown, no code fences) matching this exact s
   "insights": {
     "marketSize": {
       "range": "A rough size of the addressable market. Use $ ranges like '$50M–$200M' for a narrow niche or '$5B–$20B' for a large category. If truly unknowable, use 'Unknown — too niche to estimate'.",
+      "tam": "Total Addressable Market — the entire market if you had 100% share. $ range.",
+      "sam": "Serviceable Addressable Market — the segment you can realistically reach. $ range.",
+      "som": "Serviceable Obtainable Market — what you can capture in year 1-2. $ range.",
       "confidence": "low" | "medium" | "high",
       "reasoning": "1-2 sentences grounding the estimate (who the buyer is, rough pricing, plausible user count)."
     },
@@ -76,6 +79,23 @@ Respond with ONLY valid JSON (no markdown, no code fences) matching this exact s
     ],
     "pricingBenchmarks": [
       { "competitor": "App name", "freeTier": "e.g. '5/month' or 'No free tier'", "paidTier": "e.g. '$9/mo Pro, $89/yr'", "model": "freemium" | "subscription" | "one-time" | "usage-based" | "free" }
+    ],
+    "leanCanvas": [
+      { "section": "Problem", "content": "Top 1-3 problems this solves" },
+      { "section": "Customer Segments", "content": "Specific target users" },
+      { "section": "Unique Value Proposition", "content": "Single clear compelling message" },
+      { "section": "Solution", "content": "Top 1-3 features" },
+      { "section": "Channels", "content": "How you reach customers" },
+      { "section": "Revenue Streams", "content": "How you make money" },
+      { "section": "Cost Structure", "content": "Main costs" },
+      { "section": "Key Metrics", "content": "What to measure" },
+      { "section": "Unfair Advantage", "content": "What can't be easily copied" }
+    ],
+    "nextSteps": [
+      { "description": "What to test", "channel": "Where to test it", "metric": "What to measure", "successCriteria": "What success looks like", "timeframe": "How long" }
+    ],
+    "actionPlan": [
+      { "week": "Week 1-2", "goal": "Validate demand", "tasks": ["Interview 10 target users", "Run landing page smoke test"] }
     ]
   }
 }
@@ -86,6 +106,9 @@ Insights guidance:
 - graveyard: 0–5 entries. Skip if you can't name a real dead predecessor.
 - regulatoryFlags: 0–5 entries. Only include what actually applies (not every app is HIPAA).
 - pricingBenchmarks: 0–5 entries pulled from competitors in the list. Omit competitors whose pricing you don't know.
+- leanCanvas: always exactly 9 entries (one per Lean Canvas section). Keep each content field to 1-2 concise sentences.
+- nextSteps: exactly 3 concrete, testable experiments the founder can run in the next 2 weeks. Be specific about channels (Reddit, Product Hunt, cold email, etc.) and measurable success criteria.
+- actionPlan: 4-6 entries covering a 90-day plan. Group by week ranges. Each entry should have 2-4 concrete tasks.
 
 Scoring rubric:
 - viability: can a solo/small team actually build and sustain this? (tech feasibility, cost, legal)
@@ -112,3 +135,28 @@ Respond with ONLY valid JSON (no markdown, no code fences) matching this exact s
 }
 
 Do not soften your tone. Do not pad with positives. The constructive analysis already exists elsewhere — your job is the opposite.`;
+
+export const PERSONA_SYSTEM_PROMPT = `You are a customer research simulator. Given a startup idea, its target user description, and competitor landscape, generate 3-5 realistic fictional user personas who would encounter this product.
+
+Each persona should feel like a real person — specific age, job title, context. Their "quote" should sound like something said in a customer interview, not marketing copy. Include genuine objections and realistic willingness to pay.
+
+Respond with ONLY valid JSON (no markdown, no code fences) matching this exact shape:
+{
+  "personas": [
+    {
+      "name": "First name",
+      "age": 28,
+      "role": "Job title and context, e.g. 'Product manager at a Series B startup'",
+      "quote": "A 1-2 sentence reaction to the product, in first person, as if spoken in a customer interview. Be honest — not everyone should love it.",
+      "willingnessToPay": "e.g. '$10/month max', '$0 — I'd only use a free tier', '$50/month if it saves me 5 hours/week'",
+      "objection": "The #1 reason this persona would NOT use or stop using the product. Specific, not generic."
+    }
+  ]
+}
+
+Rules:
+- Generate 3-5 personas. At least one should be skeptical or negative.
+- Vary demographics: different ages, roles, company sizes, technical levels.
+- Quotes should sound natural and conversational, not polished.
+- Willingness to pay must be specific dollar amounts or clear "no".
+- Objections must be concrete and actionable (not "too expensive" but "I already use Notion for this and switching costs are too high").`;

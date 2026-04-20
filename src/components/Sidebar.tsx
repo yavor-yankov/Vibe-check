@@ -1,6 +1,7 @@
 "use client";
 
 import { Menu, Plus, Search, Sparkles, Trash2, X } from "lucide-react";
+import Link from "next/link";
 import { useState, useMemo } from "react";
 import type { Session } from "@/lib/types";
 import UserBadge from "./UserBadge";
@@ -29,11 +30,20 @@ type VerdictFilter = "all" | "build_it" | "iterate" | "rethink" | "skip" | "in_p
 
 const VERDICT_LABELS: Record<VerdictFilter, string> = {
   all: "All",
-  build_it: "✅ Build",
-  iterate: "🔄 Iterate",
-  rethink: "🤔 Rethink",
-  skip: "❌ Skip",
-  in_progress: "⏳ In progress",
+  build_it: "Build",
+  iterate: "Iterate",
+  rethink: "Rethink",
+  skip: "Skip",
+  in_progress: "In progress",
+};
+
+const VERDICT_ICONS: Record<VerdictFilter, string> = {
+  all: "",
+  build_it: "\u2705 ",
+  iterate: "\uD83D\uDD04 ",
+  rethink: "\uD83E\uDD14 ",
+  skip: "\u274C ",
+  in_progress: "\u23F3 ",
 };
 
 function relative(ts: number): string {
@@ -139,15 +149,21 @@ export default function Sidebar({
       >
         {/* Header */}
         <div className="p-4 flex items-center gap-2 border-b border-[color:var(--border)]">
-          <div className="w-8 h-8 rounded-lg bg-[color:var(--accent)] flex items-center justify-center text-white">
-            <Sparkles size={18} />
-          </div>
-          <div className="flex-1">
-            <div className="font-semibold leading-tight">Vibe Check</div>
-            <div className="text-xs text-[color:var(--muted)] leading-tight">
-              Pressure-test your app idea
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-2 flex-1 min-w-0 hover:opacity-80 transition"
+            title="Go to dashboard"
+          >
+            <div className="w-8 h-8 rounded-lg bg-[color:var(--accent)] flex items-center justify-center text-white shrink-0">
+              <Sparkles size={18} />
             </div>
-          </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold leading-tight">Vibe Check</div>
+              <div className="text-xs text-[color:var(--muted)] leading-tight">
+                Pressure-test your app idea
+              </div>
+            </div>
+          </Link>
           {/* Close button — mobile only */}
           <button
             type="button"
@@ -204,12 +220,15 @@ export default function Sidebar({
                     key={v}
                     type="button"
                     onClick={() => setVerdictFilter(v === verdictFilter ? "all" : v)}
+                    aria-label={v === "all" ? `Show all ${counts.all} sessions` : `Filter by ${VERDICT_LABELS[v]}, ${counts[v]} sessions`}
+                    aria-pressed={verdictFilter === v}
                     className={`text-[11px] px-2 py-0.5 rounded-full border transition ${
                       verdictFilter === v
                         ? "bg-[color:var(--accent)] text-white border-[color:var(--accent)]"
                         : "border-[color:var(--border)] text-[color:var(--muted)] hover:border-[color:var(--accent)] hover:text-[color:var(--foreground)]"
                     }`}
                   >
+                    <span aria-hidden="true">{VERDICT_ICONS[v]}</span>
                     {VERDICT_LABELS[v]}
                     {v !== "all" && (
                       <span className="ml-1 opacity-70">{counts[v]}</span>
