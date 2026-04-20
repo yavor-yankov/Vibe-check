@@ -8,6 +8,7 @@ import {
   Download,
   ExternalLink,
   Flame,
+  Globe,
   Layers,
   Map,
   Pencil,
@@ -46,7 +47,7 @@ const VERDICT_STYLES: Record<
     label: "Iterate",
   },
   rethink: {
-    bg: "bg-[color:var(--warn)]",
+    bg: "bg-[color:var(--bad)]",
     text: "text-white",
     label: "Rethink",
   },
@@ -602,27 +603,5 @@ function StackRow({ label, items }: { label: string; items: string[] }) {
         ))}
       </div>
     </div>
-  );
-}
-
-function Globe({ size, className }: { size: number; className?: string }) {
-  // tiny inline to avoid extra import weight — reuse lucide actually
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <circle cx="12" cy="12" r="10" />
-      <path d="M2 12h20" />
-      <path d="M12 2a15.3 15.3 0 0 1 0 20" />
-      <path d="M12 2a15.3 15.3 0 0 0 0 20" />
-    </svg>
   );
 }
