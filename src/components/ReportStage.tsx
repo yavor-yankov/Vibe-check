@@ -2,6 +2,7 @@
 
 import {
   AlertTriangle,
+  ArrowUp,
   AtSign,
   CheckCircle2,
   ChevronDown,
@@ -20,7 +21,7 @@ import {
   Target,
   Users,
 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { AnalysisReport, Competitor, NameSuggestion, Persona, RedTeamReport } from "@/lib/types";
 import InsightsPanel from "./InsightsPanel";
 
@@ -242,6 +243,44 @@ export default function ReportStage({
   const [personasOpen, setPersonasOpen] = useState(false);
   const [namesOpen, setNamesOpen] = useState(false);
   const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const scrollContainerRef = useRef<HTMLElement | null>(null);
+
+  // Track scroll position to show/hide the scroll-to-top button.
+  // The scroll container is the report's parent in the dashboard layout;
+  // we find it once via the ref callback and attach a passive listener.
+  const reportTopRef = useRef<HTMLDivElement>(null);
+
+  const findScrollParent = useCallback((node: HTMLElement | null): HTMLElement | null => {
+    let el = node?.parentElement;
+    while (el) {
+      const { overflow, overflowY } = getComputedStyle(el);
+      if (/(auto|scroll)/.test(overflow + overflowY)) return el;
+      el = el.parentElement;
+    }
+    return null;
+  }, []);
+
+  useEffect(() => {
+    const container = findScrollParent(reportTopRef.current);
+    if (!container) return;
+    scrollContainerRef.current = container;
+    function handleScroll() {
+      setShowScrollTop((container!.scrollTop ?? 0) > 400);
+    }
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [findScrollParent]);
+
+  function scrollToTop() {
+    const container = scrollContainerRef.current;
+    if (container) {
+      container.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
 
   function handleExportPdf() {
     const original = document.title;
@@ -372,8 +411,8 @@ export default function ReportStage({
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-10 fade-in-up space-y-8">
-      <div className="flex items-start justify-between gap-4">
+    <div className="max-w-4xl mx-auto px-6 py-10 fade-in-up space-y-8 pb-24">
+      <div ref={reportTopRef} className="flex items-start justify-between gap-4">
         <div>
           <div className="text-xs text-[color:var(--accent)] font-medium mb-2">
             Vibe check report
@@ -382,50 +421,6 @@ export default function ReportStage({
             {report.verdictLabel}
           </h1>
           <p className="text-[color:var(--muted)] max-w-2xl">{report.summary}</p>
-        </div>
-        <div className="shrink-0 flex items-center gap-2 print:hidden">
-          <button
-            onClick={handleExportPdf}
-            className="inline-flex items-center gap-2 rounded-lg border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[color:var(--card)] transition"
-            title="Export report as PDF"
-          >
-            <Download size={14} />
-            PDF
-          </button>
-          <button
-            onClick={handleExportMarkdown}
-            className="inline-flex items-center gap-2 rounded-lg border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[color:var(--card)] transition"
-            title="Export report as Markdown"
-          >
-            <FileText size={14} />
-            Markdown
-          </button>
-          <button
-            onClick={handleEmailReport}
-            disabled={emailStatus === "sending"}
-            className="inline-flex items-center gap-2 rounded-lg border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[color:var(--card)] transition disabled:opacity-40"
-            title="Email this report to yourself"
-          >
-            <Mail size={14} />
-            {emailStatus === "sending" ? "Sending…" : emailStatus === "sent" ? "Sent!" : emailStatus === "error" ? "Failed" : "Email"}
-          </button>
-          <button
-            onClick={() => {
-              setRefineDraft(ideaSummary);
-              setRefineOpen((v) => !v);
-            }}
-            className="inline-flex items-center gap-2 rounded-lg border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[color:var(--card)] transition"
-          >
-            <Pencil size={14} />
-            Refine & re-score
-          </button>
-          <button
-            onClick={onRestart}
-            className="inline-flex items-center gap-2 rounded-lg border border-[color:var(--border)] px-3 py-2 text-sm hover:bg-[color:var(--card)] transition"
-          >
-            <RotateCcw size={14} />
-            New check
-          </button>
         </div>
       </div>
 
@@ -894,6 +889,76 @@ export default function ReportStage({
 
       <div className="text-center text-xs text-[color:var(--muted)] pt-4">
         Based on your idea: &ldquo;{ideaSummary}&rdquo;
+      </div>
+
+      {/* ── Sticky floating action bar ── */}
+      <div className="print:hidden fixed bottom-0 left-0 right-0 z-20 pointer-events-none">
+        <div className="max-w-4xl mx-auto px-6 pb-4 flex items-end justify-between">
+          {/* Scroll-to-top — left side */}
+          <div>
+            {showScrollTop && (
+              <button
+                type="button"
+                onClick={scrollToTop}
+                aria-label="Scroll to top"
+                className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-[color:var(--card)] border border-[color:var(--border)] shadow-lg px-3 py-2 text-xs font-medium text-[color:var(--foreground)] hover:bg-[color:var(--background)] transition"
+              >
+                <ArrowUp size={14} />
+                Top
+              </button>
+            )}
+          </div>
+
+          {/* Action buttons — right side */}
+          <div className="pointer-events-auto flex items-center gap-1.5 rounded-xl bg-[color:var(--card)] border border-[color:var(--border)] shadow-lg px-2 py-1.5">
+            <button
+              onClick={handleExportPdf}
+              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium hover:bg-[color:var(--background)] transition"
+              title="Export as PDF"
+            >
+              <Download size={13} />
+              PDF
+            </button>
+            <button
+              onClick={handleExportMarkdown}
+              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium hover:bg-[color:var(--background)] transition"
+              title="Export as Markdown"
+            >
+              <FileText size={13} />
+              MD
+            </button>
+            <button
+              onClick={handleEmailReport}
+              disabled={emailStatus === "sending"}
+              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium hover:bg-[color:var(--background)] transition disabled:opacity-40"
+              title="Email report to yourself"
+            >
+              <Mail size={13} />
+              {emailStatus === "sending" ? "..." : emailStatus === "sent" ? "Sent!" : emailStatus === "error" ? "Failed" : "Email"}
+            </button>
+            <div className="w-px h-5 bg-[color:var(--border)]" />
+            <button
+              onClick={() => {
+                setRefineDraft(ideaSummary);
+                setRefineOpen((v) => !v);
+                scrollToTop();
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium hover:bg-[color:var(--background)] transition"
+              title="Refine & re-score"
+            >
+              <Pencil size={13} />
+              Refine
+            </button>
+            <button
+              onClick={onRestart}
+              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium hover:bg-[color:var(--background)] transition"
+              title="New vibe check"
+            >
+              <RotateCcw size={13} />
+              New
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

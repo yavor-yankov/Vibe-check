@@ -27,7 +27,7 @@ export async function POST(
   }
 
   try {
-    const reportUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://vibecheck.app"}/dashboard`;
+    const reportUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://vibecheck.app"}/dashboard`;
     await sendReportEmail(
       email,
       reportUrl,
