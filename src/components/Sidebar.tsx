@@ -1,6 +1,7 @@
 "use client";
 
 import { Menu, Plus, Search, Sparkles, Trash2, X } from "lucide-react";
+import Link from "next/link";
 import { useState, useMemo } from "react";
 import type { Session } from "@/lib/types";
 import UserBadge from "./UserBadge";
@@ -139,15 +140,21 @@ export default function Sidebar({
       >
         {/* Header */}
         <div className="p-4 flex items-center gap-2 border-b border-[color:var(--border)]">
-          <div className="w-8 h-8 rounded-lg bg-[color:var(--accent)] flex items-center justify-center text-white">
-            <Sparkles size={18} />
-          </div>
-          <div className="flex-1">
-            <div className="font-semibold leading-tight">Vibe Check</div>
-            <div className="text-xs text-[color:var(--muted)] leading-tight">
-              Pressure-test your app idea
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-2 flex-1 min-w-0 hover:opacity-80 transition"
+            title="Go to dashboard"
+          >
+            <div className="w-8 h-8 rounded-lg bg-[color:var(--accent)] flex items-center justify-center text-white shrink-0">
+              <Sparkles size={18} />
             </div>
-          </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold leading-tight">Vibe Check</div>
+              <div className="text-xs text-[color:var(--muted)] leading-tight">
+                Pressure-test your app idea
+              </div>
+            </div>
+          </Link>
           {/* Close button — mobile only */}
           <button
             type="button"
