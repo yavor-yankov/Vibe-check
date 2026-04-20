@@ -38,6 +38,9 @@ export interface RoadmapStep {
 
 export interface MarketSizeEstimate {
   range: string;
+  tam?: string;
+  sam?: string;
+  som?: string;
   confidence: "low" | "medium" | "high";
   reasoning: string;
 }
@@ -94,6 +97,25 @@ export interface PricingBenchmark {
   model: PricingModel;
 }
 
+export interface LeanCanvasEntry {
+  section: string;
+  content: string;
+}
+
+export interface NextStep {
+  description: string;
+  channel: string;
+  metric: string;
+  successCriteria: string;
+  timeframe: string;
+}
+
+export interface ActionPlanWeek {
+  week: string;
+  goal: string;
+  tasks: string[];
+}
+
 export interface ExpandedInsights {
   marketSize: MarketSizeEstimate;
   fundingSignal: FundingSignal;
@@ -101,6 +123,9 @@ export interface ExpandedInsights {
   buildEffort: BuildEffortEstimate;
   regulatoryFlags: RegulatoryFlag[];
   pricingBenchmarks: PricingBenchmark[];
+  leanCanvas?: LeanCanvasEntry[];
+  nextSteps?: NextStep[];
+  actionPlan?: ActionPlanWeek[];
 }
 
 export interface AnalysisReport {
