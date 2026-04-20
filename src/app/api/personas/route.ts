@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getGeminiClient, modelForTier } from "@/lib/gemini";
+import { getGeminiClient, modelForTier, friendlyAIError } from "@/lib/gemini";
 import { PERSONA_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { RedTeamBodySchema, parseBody } from "@/lib/validation";
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
   try {
     client = getGeminiClient();
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Gemini not configured";
+    const msg = friendlyAIError(err);
     return Response.json({ error: msg }, { status: 500 });
   }
 

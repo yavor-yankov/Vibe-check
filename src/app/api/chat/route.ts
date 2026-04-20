@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getGeminiClient, modelForTier } from "@/lib/gemini";
+import { getGeminiClient, modelForTier, friendlyAIError } from "@/lib/gemini";
 import { INTERVIEW_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { ChatBodySchema, parseBody } from "@/lib/validation";
@@ -84,8 +84,7 @@ export async function POST(request: NextRequest) {
           }
           controller.close();
         } catch (err) {
-          const msg = err instanceof Error ? err.message : "stream error";
-          controller.enqueue(encoder.encode(`\n[ERROR]: ${msg}`));
+          controller.enqueue(encoder.encode(`\n[ERROR]: ${friendlyAIError(err)}`));
           controller.close();
         }
       },
@@ -98,8 +97,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "unknown error";
-    return new Response(JSON.stringify({ error: msg }), {
+    return new Response(JSON.stringify({ error: friendlyAIError(err) }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     });
