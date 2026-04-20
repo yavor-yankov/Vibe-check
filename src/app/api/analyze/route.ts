@@ -138,9 +138,9 @@ function sanitizeInsights(
     },
     regulatoryFlags,
     pricingBenchmarks,
-    leanCanvas: sanitizeLeanCanvas(raw),
-    nextSteps: sanitizeNextSteps(raw),
-    actionPlan: sanitizeActionPlan(raw),
+    leanCanvas: sanitizeLeanCanvas(r),
+    nextSteps: sanitizeNextSteps(r),
+    actionPlan: sanitizeActionPlan(r),
   };
 }
 
