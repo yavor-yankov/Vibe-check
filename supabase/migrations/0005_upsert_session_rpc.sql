@@ -40,7 +40,7 @@ BEGIN
     p_session_id,
     p_user_id,
     p_title,
-    p_stage::session_stage,
+    p_stage::text,
     p_idea_summary,
     p_report_generation
   )
@@ -59,7 +59,7 @@ BEGIN
     SELECT
       (m->>'id')::uuid,
       p_session_id,
-      (m->>'role')::message_role,
+      (m->>'role')::text,
       m->>'content',
       (m->>'created_at')::timestamptz
     FROM jsonb_array_elements(p_messages) AS m;
@@ -88,7 +88,7 @@ BEGIN
     )
     VALUES (
       p_session_id,
-      (p_report->>'verdict')::verdict,
+      (p_report->>'verdict')::text,
       p_report->>'verdict_label',
       p_report->>'summary',
       (p_report->'scores'),
