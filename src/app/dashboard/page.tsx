@@ -15,6 +15,7 @@ import type {
   AnalysisReport,
   ChatMessage,
   FounderProfile,
+  NameSuggestion,
   Persona,
   RedTeamReport,
   Session,
@@ -38,6 +39,9 @@ export default function Home() {
   const [personas, setPersonas] = useState<Persona[] | null>(null);
   const [isPersonasLoading, setIsPersonasLoading] = useState(false);
   const [personasError, setPersonasError] = useState<string | null>(null);
+  const [nameSuggestions, setNameSuggestions] = useState<NameSuggestion[] | null>(null);
+  const [isNamesLoading, setIsNamesLoading] = useState(false);
+  const [namesError, setNamesError] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
   // Mobile sidebar drawer state
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -162,12 +166,19 @@ export default function Home() {
     setPersonasError(null);
   };
 
+  const resetNamesState = () => {
+    setNameSuggestions(null);
+    setIsNamesLoading(false);
+    setNamesError(null);
+  };
+
   const handleNew = () => {
     const s = newSession();
     setCurrent(s);
     setError(null);
     resetRedTeamState();
     resetPersonasState();
+    resetNamesState();
   };
 
   const handleSelect = (id: string) => {
@@ -177,6 +188,7 @@ export default function Home() {
       setError(null);
       resetRedTeamState();
       resetPersonasState();
+    resetNamesState();
     }
   };
 
@@ -191,6 +203,7 @@ export default function Home() {
         setCurrent(next[0] ?? newSession());
         resetRedTeamState();
         resetPersonasState();
+    resetNamesState();
       }
       return next;
     });
@@ -427,6 +440,7 @@ export default function Home() {
     setError(null);
     resetRedTeamState();
     resetPersonasState();
+    resetNamesState();
     const originalSummary = current.ideaSummary;
     const scanning: Session = {
       ...current,
@@ -540,6 +554,37 @@ export default function Home() {
     }
   };
 
+  const runNames = async () => {
+    const snapshot = currentRef.current;
+    if (!snapshot) return;
+    setNamesError(null);
+    setIsNamesLoading(true);
+    const abort = new AbortController();
+    const timeout = setTimeout(() => abort.abort(), 20_000);
+    try {
+      const res = await fetch("/api/names", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ideaSummary: snapshot.ideaSummary ?? "" }),
+        signal: abort.signal,
+      });
+      const data = (await res.json()) as { names?: NameSuggestion[]; error?: string };
+      if (!res.ok || !data.names) {
+        throw new Error(data.error || "Name generation failed");
+      }
+      setNameSuggestions(data.names);
+    } catch (err) {
+      const msg =
+        (err as Error)?.name === "AbortError"
+          ? "Name request timed out."
+          : err instanceof Error ? err.message : "Unknown error";
+      setNamesError(msg);
+    } finally {
+      clearTimeout(timeout);
+      setIsNamesLoading(false);
+    }
+  };
+
   if (!isHydrated || !current) {
     return <DashboardSkeleton />;
   }
@@ -634,10 +679,14 @@ export default function Home() {
               personas={personas}
               isPersonasLoading={isPersonasLoading}
               personasError={personasError}
+              nameSuggestions={nameSuggestions}
+              isNamesLoading={isNamesLoading}
+              namesError={namesError}
               onRestart={handleNew}
               onRefine={refineAnalysis}
               onRedTeam={runRedTeam}
               onPersonas={runPersonas}
+              onNames={runNames}
             />
           </div>
         )}

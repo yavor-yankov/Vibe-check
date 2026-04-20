@@ -2,6 +2,7 @@
 
 import {
   AlertTriangle,
+  AtSign,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -20,7 +21,7 @@ import {
   Users,
 } from "lucide-react";
 import { useState } from "react";
-import type { AnalysisReport, Competitor, Persona, RedTeamReport } from "@/lib/types";
+import type { AnalysisReport, Competitor, NameSuggestion, Persona, RedTeamReport } from "@/lib/types";
 import InsightsPanel from "./InsightsPanel";
 
 interface ReportStageProps {
@@ -34,10 +35,14 @@ interface ReportStageProps {
   personas?: Persona[] | null;
   isPersonasLoading?: boolean;
   personasError?: string | null;
+  nameSuggestions?: NameSuggestion[] | null;
+  isNamesLoading?: boolean;
+  namesError?: string | null;
   onRestart: () => void;
   onRefine: (newSummary: string) => void;
   onRedTeam: () => void;
   onPersonas: () => void;
+  onNames: () => void;
 }
 
 const VERDICT_STYLES: Record<
@@ -221,16 +226,21 @@ export default function ReportStage({
   personas,
   isPersonasLoading,
   personasError,
+  nameSuggestions,
+  isNamesLoading,
+  namesError,
   onRestart,
   onRefine,
   onRedTeam,
   onPersonas,
+  onNames,
 }: ReportStageProps) {
   const verdict = VERDICT_STYLES[report.verdict] ?? VERDICT_STYLES.iterate;
   const [refineOpen, setRefineOpen] = useState(false);
   const [refineDraft, setRefineDraft] = useState(ideaSummary);
   const [redTeamOpen, setRedTeamOpen] = useState(false);
   const [personasOpen, setPersonasOpen] = useState(false);
+  const [namesOpen, setNamesOpen] = useState(false);
   const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
 
   function handleExportPdf() {
@@ -807,6 +817,72 @@ export default function ReportStage({
                         <span className="font-medium text-[color:var(--bad)]">Objection:</span>{" "}
                         <span className="text-[color:var(--muted)]">{p.objection}</span>
                       </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* ── Name & Domain Suggestions ── */}
+      <section className="rounded-xl border border-[color:var(--accent)]/20 bg-[color:var(--accent)]/3 p-6">
+        <button
+          type="button"
+          onClick={() => {
+            if (!nameSuggestions && !isNamesLoading) onNames();
+            setNamesOpen((v) => !v);
+          }}
+          className="w-full flex items-center justify-between gap-2 text-left"
+        >
+          <div className="flex items-center gap-2">
+            <AtSign size={18} className="text-[color:var(--accent)]" />
+            <h2 className="text-lg font-semibold">Name ideas</h2>
+            <span className="text-xs text-[color:var(--muted)] font-normal">
+              — brand names + domain check
+            </span>
+          </div>
+          {namesOpen ? (
+            <ChevronUp size={18} className="text-[color:var(--muted)]" />
+          ) : (
+            <ChevronDown size={18} className="text-[color:var(--muted)]" />
+          )}
+        </button>
+
+        {namesOpen && (
+          <div className="mt-4 space-y-2">
+            {isNamesLoading && (
+              <div className="space-y-2">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 rounded-lg border border-[color:var(--border)] bg-[color:var(--background)] p-3">
+                    <div className="skeleton h-4 w-24" style={{ animationDelay: `${i * 0.08}s` }} />
+                    <div className="skeleton h-3 w-32" style={{ animationDelay: `${i * 0.08 + 0.04}s` }} />
+                    <div className="skeleton-circle w-5 h-5 ml-auto" style={{ animationDelay: `${i * 0.08 + 0.08}s` }} />
+                  </div>
+                ))}
+              </div>
+            )}
+            {namesError && (
+              <div className="text-sm text-[color:var(--bad)]">{namesError}</div>
+            )}
+            {nameSuggestions && nameSuggestions.length > 0 && (
+              <div className="space-y-2">
+                {nameSuggestions.map((n) => (
+                  <div key={n.domain} className="flex items-center gap-3 rounded-lg border border-[color:var(--border)] bg-[color:var(--background)] p-3">
+                    <div className="font-semibold text-sm">{n.name}</div>
+                    <div className="text-xs text-[color:var(--muted)] font-mono">{n.domain}</div>
+                    <div className="text-xs text-[color:var(--muted)] flex-1 truncate italic">{n.tagline}</div>
+                    <div className="shrink-0">
+                      {n.available === true && (
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[color:var(--good)]/10 text-[color:var(--good)]">Available</span>
+                      )}
+                      {n.available === false && (
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[color:var(--bad)]/10 text-[color:var(--bad)]">Taken</span>
+                      )}
+                      {n.available === null && (
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[color:var(--border)] text-[color:var(--muted)]">Unknown</span>
+                      )}
                     </div>
                   </div>
                 ))}

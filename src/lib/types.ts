@@ -173,6 +173,13 @@ export interface FounderProfile {
   priorExperience: PriorExperience;
 }
 
+export interface NameSuggestion {
+  name: string;
+  domain: string;
+  available: boolean | null;
+  tagline: string;
+}
+
 export type WizardStage = "intro" | "interview" | "scanning" | "report";
 
 export interface Session {
