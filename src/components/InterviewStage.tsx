@@ -247,7 +247,9 @@ export default function InterviewStage({
               <textarea
                 ref={textareaRef}
                 value={draft}
-                onChange={(e) => setDraft(e.target.value)}
+                onChange={(e) => {
+                  if (e.target.value.length <= 2000) setDraft(e.target.value);
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
@@ -268,6 +270,11 @@ export default function InterviewStage({
                 <Send size={16} />
               </button>
             </div>
+            {draft.length > 1500 && (
+              <div className={`text-right text-[11px] mt-1 mr-1 ${draft.length >= 2000 ? "text-[color:var(--bad)]" : "text-[color:var(--muted)]"}`}>
+                {draft.length}/2000
+              </div>
+            )}
             {canEscape && (
               <div className="mt-2 flex justify-end">
                 <button

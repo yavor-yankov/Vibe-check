@@ -53,11 +53,18 @@ export async function POST(request: NextRequest) {
   }
 
   // Gemini expects history with user/model roles. First turn is the user's seed idea.
-  const history = messages.slice(0, -1).map((m) => ({
+  // Cap to the most recent 16 messages to stay well within token limits on
+  // free-tier models. The system prompt + 16 messages ≈ 4-6k tokens, leaving
+  // plenty of headroom for the response.
+  const MAX_HISTORY = 16;
+  const recent = messages.length > MAX_HISTORY + 1
+    ? messages.slice(messages.length - MAX_HISTORY - 1)
+    : messages;
+  const history = recent.slice(0, -1).map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
     parts: [{ text: m.content }],
   }));
-  const last = messages[messages.length - 1];
+  const last = recent[recent.length - 1];
   if (last.role !== "user") {
     return new Response(
       JSON.stringify({ error: "Last message must be from user" }),
