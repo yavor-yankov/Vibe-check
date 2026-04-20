@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import CompareView from "@/components/CompareView";
 import IntroStage from "@/components/IntroStage";
 import InterviewStage, {
   buildAssistantMessage,
@@ -43,6 +44,7 @@ export default function Home() {
   // Incrementing this counter signals UsageBadge to re-fetch the quota
   // after each vibe check is consumed.
   const [usageRefreshSignal, setUsageRefreshSignal] = useState(0);
+  const [compareSessionIds, setCompareSessionIds] = useState<string[] | null>(null);
 
   // Keep a ref to the latest active session so async callbacks don't
   // act on stale closures (e.g. runRedTeam finishing after the user
@@ -550,6 +552,7 @@ export default function Home() {
         onNew={handleNew}
         onSelect={handleSelect}
         onDelete={handleDelete}
+        onCompare={(ids) => setCompareSessionIds(ids)}
         isOpen={isSidebarOpen}
         onOpen={() => setIsSidebarOpen(true)}
         onClose={() => setIsSidebarOpen(false)}
@@ -557,7 +560,17 @@ export default function Home() {
       />
       {/* On mobile, add top padding to clear the fixed hamburger button */}
       <main className="flex-1 min-w-0 md:pt-0 pt-14 flex flex-col overflow-hidden">
-        {error && (
+        {/* Compare view takes over the main area */}
+        {compareSessionIds && (
+          <div className="flex-1 overflow-y-auto">
+            <CompareView
+              sessions={sessions.filter((s) => compareSessionIds.includes(s.id))}
+              onClose={() => setCompareSessionIds(null)}
+            />
+          </div>
+        )}
+
+        {!compareSessionIds && error && (
           <div className="px-6 pt-4">
             <div className="max-w-3xl mx-auto rounded-lg border border-[color:var(--bad)]/30 bg-[color:var(--bad)]/5 px-4 py-3 text-sm text-[color:var(--bad)]">
               <b>Error:</b> {error}
@@ -565,7 +578,7 @@ export default function Home() {
           </div>
         )}
 
-        {current.stage === "intro" && (
+        {!compareSessionIds && current.stage === "intro" && (
           <div className="flex-1 overflow-y-auto">
             <IntroStage onStart={startInterview} />
           </div>
@@ -573,7 +586,7 @@ export default function Home() {
 
         {/* InterviewStage manages its own internal scroll — give it all remaining height.
             The wrapping div passes height down; InterviewStage uses h-full internally. */}
-        {current.stage === "interview" && (
+        {!compareSessionIds && current.stage === "interview" && (
           <div className="flex-1 min-h-0 flex flex-col">
           <InterviewStage
             messages={current.messages}
@@ -584,7 +597,7 @@ export default function Home() {
           </div>
         )}
 
-        {current.stage === "scanning" && (
+        {!compareSessionIds && current.stage === "scanning" && (
           <div className="flex-1 overflow-y-auto">
             <ScanningStage
               ideaSummary={current.ideaSummary ?? ""}
@@ -601,13 +614,13 @@ export default function Home() {
           </div>
         )}
 
-        {current.stage === "report" && !current.report && (
+        {!compareSessionIds && current.stage === "report" && !current.report && (
           <div className="flex-1 overflow-y-auto">
             <ReportSkeleton />
           </div>
         )}
 
-        {current.stage === "report" && current.report && (
+        {!compareSessionIds && current.stage === "report" && current.report && (
           <div className="flex-1 overflow-y-auto">
             <ReportStage
               key={current.id}
