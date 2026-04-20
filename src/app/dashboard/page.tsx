@@ -13,6 +13,7 @@ import Sidebar from "@/components/Sidebar";
 import type {
   AnalysisReport,
   ChatMessage,
+  Persona,
   RedTeamReport,
   Session,
 } from "@/lib/types";
@@ -32,6 +33,9 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [isRedTeamLoading, setIsRedTeamLoading] = useState(false);
   const [redTeamError, setRedTeamError] = useState<string | null>(null);
+  const [personas, setPersonas] = useState<Persona[] | null>(null);
+  const [isPersonasLoading, setIsPersonasLoading] = useState(false);
+  const [personasError, setPersonasError] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
   // Mobile sidebar drawer state
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -149,11 +153,18 @@ export default function Home() {
     setRedTeamError(null);
   };
 
+  const resetPersonasState = () => {
+    setPersonas(null);
+    setIsPersonasLoading(false);
+    setPersonasError(null);
+  };
+
   const handleNew = () => {
     const s = newSession();
     setCurrent(s);
     setError(null);
     resetRedTeamState();
+    resetPersonasState();
   };
 
   const handleSelect = (id: string) => {
@@ -162,6 +173,7 @@ export default function Home() {
       setCurrent(s);
       setError(null);
       resetRedTeamState();
+      resetPersonasState();
     }
   };
 
@@ -175,6 +187,7 @@ export default function Home() {
       if (current?.id === id) {
         setCurrent(next[0] ?? newSession());
         resetRedTeamState();
+        resetPersonasState();
       }
       return next;
     });
@@ -408,6 +421,7 @@ export default function Home() {
     if (!current) return;
     setError(null);
     resetRedTeamState();
+    resetPersonasState();
     const originalSummary = current.ideaSummary;
     const scanning: Session = {
       ...current,
@@ -480,6 +494,44 @@ export default function Home() {
       ) {
         setIsRedTeamLoading(false);
       }
+    }
+  };
+
+  const runPersonas = async () => {
+    const snapshot = currentRef.current;
+    if (!snapshot || !snapshot.report) return;
+    setPersonasError(null);
+    setIsPersonasLoading(true);
+    const abort = new AbortController();
+    const timeout = setTimeout(() => abort.abort(), 30_000);
+    try {
+      const res = await fetch("/api/personas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ideaSummary: snapshot.ideaSummary ?? "",
+          messages: snapshot.messages,
+          competitors: snapshot.competitors,
+          report: snapshot.report,
+        }),
+        signal: abort.signal,
+      });
+      const data = (await res.json()) as { personas?: Persona[]; error?: string };
+      if (!res.ok || !data.personas) {
+        throw new Error(data.error || "Persona simulation failed");
+      }
+      setPersonas(data.personas);
+    } catch (err) {
+      const msg =
+        (err as Error)?.name === "AbortError"
+          ? "Persona request timed out. Please try again."
+          : err instanceof Error
+            ? err.message
+            : "Unknown error";
+      setPersonasError(msg);
+    } finally {
+      clearTimeout(timeout);
+      setIsPersonasLoading(false);
     }
   };
 
@@ -562,9 +614,13 @@ export default function Home() {
               redTeamReport={current.redTeamReport ?? null}
               isRedTeamLoading={isRedTeamLoading}
               redTeamError={redTeamError}
+              personas={personas}
+              isPersonasLoading={isPersonasLoading}
+              personasError={personasError}
               onRestart={handleNew}
               onRefine={refineAnalysis}
               onRedTeam={runRedTeam}
+              onPersonas={runPersonas}
             />
           </div>
         )}

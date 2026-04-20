@@ -16,9 +16,10 @@ import {
   RotateCcw,
   Sparkles,
   Target,
+  Users,
 } from "lucide-react";
 import { useState } from "react";
-import type { AnalysisReport, Competitor, RedTeamReport } from "@/lib/types";
+import type { AnalysisReport, Competitor, Persona, RedTeamReport } from "@/lib/types";
 import InsightsPanel from "./InsightsPanel";
 
 interface ReportStageProps {
@@ -28,9 +29,13 @@ interface ReportStageProps {
   redTeamReport?: RedTeamReport | null;
   isRedTeamLoading?: boolean;
   redTeamError?: string | null;
+  personas?: Persona[] | null;
+  isPersonasLoading?: boolean;
+  personasError?: string | null;
   onRestart: () => void;
   onRefine: (newSummary: string) => void;
   onRedTeam: () => void;
+  onPersonas: () => void;
 }
 
 const VERDICT_STYLES: Record<
@@ -210,14 +215,19 @@ export default function ReportStage({
   redTeamReport,
   isRedTeamLoading,
   redTeamError,
+  personas,
+  isPersonasLoading,
+  personasError,
   onRestart,
   onRefine,
   onRedTeam,
+  onPersonas,
 }: ReportStageProps) {
   const verdict = VERDICT_STYLES[report.verdict] ?? VERDICT_STYLES.iterate;
   const [refineOpen, setRefineOpen] = useState(false);
   const [refineDraft, setRefineDraft] = useState(ideaSummary);
   const [redTeamOpen, setRedTeamOpen] = useState(false);
+  const [personasOpen, setPersonasOpen] = useState(false);
 
   function handleExportPdf() {
     const original = document.title;
@@ -695,6 +705,86 @@ export default function ReportStage({
                   </ul>
                 </div>
               </>
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* ── Customer Persona Simulation ── */}
+      <section className="rounded-xl border border-[color:var(--accent)]/20 bg-[color:var(--accent)]/3 p-6">
+        <button
+          type="button"
+          onClick={() => {
+            if (!personas && !isPersonasLoading) onPersonas();
+            setPersonasOpen((v) => !v);
+          }}
+          className="w-full flex items-center justify-between gap-2 text-left"
+        >
+          <div className="flex items-center gap-2">
+            <Users size={18} className="text-[color:var(--accent)]" />
+            <h2 className="text-lg font-semibold">Customer personas</h2>
+            <span className="text-xs text-[color:var(--muted)] font-normal">
+              — simulated user reactions
+            </span>
+          </div>
+          {personasOpen ? (
+            <ChevronUp size={18} className="text-[color:var(--muted)]" />
+          ) : (
+            <ChevronDown size={18} className="text-[color:var(--muted)]" />
+          )}
+        </button>
+
+        {personasOpen && (
+          <div className="mt-4 space-y-3">
+            {isPersonasLoading && (
+              <div className="space-y-3">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="rounded-lg border border-[color:var(--border)] bg-[color:var(--background)] p-4 space-y-2">
+                    <div className="flex gap-3">
+                      <div className="skeleton-circle w-10 h-10 shrink-0" style={{ animationDelay: `${i * 0.1}s` }} />
+                      <div className="flex-1 space-y-1.5">
+                        <div className="skeleton h-3 w-32" style={{ animationDelay: `${i * 0.1}s` }} />
+                        <div className="skeleton h-2.5 w-48" style={{ animationDelay: `${i * 0.1 + 0.05}s` }} />
+                      </div>
+                    </div>
+                    <div className="skeleton h-3 w-full" style={{ animationDelay: `${i * 0.1 + 0.1}s` }} />
+                    <div className="skeleton h-3 w-4/5" style={{ animationDelay: `${i * 0.1 + 0.15}s` }} />
+                  </div>
+                ))}
+              </div>
+            )}
+            {personasError && (
+              <div className="text-sm text-[color:var(--bad)]">{personasError}</div>
+            )}
+            {personas && personas.length > 0 && (
+              <div className="space-y-3">
+                {personas.map((p, i) => (
+                  <div key={i} className="rounded-lg border border-[color:var(--border)] bg-[color:var(--background)] p-4">
+                    <div className="flex items-start gap-3 mb-2">
+                      <div className="w-10 h-10 rounded-full bg-[color:var(--accent)]/10 flex items-center justify-center text-sm font-semibold text-[color:var(--accent)] shrink-0">
+                        {p.name[0]}
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">{p.name}, {p.age}</div>
+                        <div className="text-xs text-[color:var(--muted)]">{p.role}</div>
+                      </div>
+                    </div>
+                    <blockquote className="text-sm italic text-[color:var(--foreground)] border-l-2 border-[color:var(--accent)] pl-3 mb-2">
+                      &ldquo;{p.quote}&rdquo;
+                    </blockquote>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="font-medium text-[color:var(--good)]">Willingness to pay:</span>{" "}
+                        <span className="text-[color:var(--muted)]">{p.willingnessToPay}</span>
+                      </div>
+                      <div>
+                        <span className="font-medium text-[color:var(--bad)]">Objection:</span>{" "}
+                        <span className="text-[color:var(--muted)]">{p.objection}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         )}

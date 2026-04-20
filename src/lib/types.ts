@@ -150,6 +150,15 @@ export interface RedTeamReport {
   silentKillers: string[];
 }
 
+export interface Persona {
+  name: string;
+  age: number;
+  role: string;
+  quote: string;
+  willingnessToPay: string;
+  objection: string;
+}
+
 export type WizardStage = "intro" | "interview" | "scanning" | "report";
 
 export interface Session {

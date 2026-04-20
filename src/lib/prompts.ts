@@ -135,3 +135,28 @@ Respond with ONLY valid JSON (no markdown, no code fences) matching this exact s
 }
 
 Do not soften your tone. Do not pad with positives. The constructive analysis already exists elsewhere — your job is the opposite.`;
+
+export const PERSONA_SYSTEM_PROMPT = `You are a customer research simulator. Given a startup idea, its target user description, and competitor landscape, generate 3-5 realistic fictional user personas who would encounter this product.
+
+Each persona should feel like a real person — specific age, job title, context. Their "quote" should sound like something said in a customer interview, not marketing copy. Include genuine objections and realistic willingness to pay.
+
+Respond with ONLY valid JSON (no markdown, no code fences) matching this exact shape:
+{
+  "personas": [
+    {
+      "name": "First name",
+      "age": 28,
+      "role": "Job title and context, e.g. 'Product manager at a Series B startup'",
+      "quote": "A 1-2 sentence reaction to the product, in first person, as if spoken in a customer interview. Be honest — not everyone should love it.",
+      "willingnessToPay": "e.g. '$10/month max', '$0 — I'd only use a free tier', '$50/month if it saves me 5 hours/week'",
+      "objection": "The #1 reason this persona would NOT use or stop using the product. Specific, not generic."
+    }
+  ]
+}
+
+Rules:
+- Generate 3-5 personas. At least one should be skeptical or negative.
+- Vary demographics: different ages, roles, company sizes, technical levels.
+- Quotes should sound natural and conversational, not polished.
+- Willingness to pay must be specific dollar amounts or clear "no".
+- Objections must be concrete and actionable (not "too expensive" but "I already use Notion for this and switching costs are too high").`;
