@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getGeminiClient, modelChainForTier, friendlyAIError, geminiCallWithFallback } from "@/lib/gemini";
+import { modelChainForTier, aiCallWithFallback, generateContent } from "@/lib/gemini";
 import { getPersonaPrompt } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { RedTeamBodySchema, parseBody } from "@/lib/validation";
@@ -44,14 +44,6 @@ export async function POST(request: NextRequest) {
   const rl = await checkRateLimit(plan.userId);
   if (rl && !rl.success) return rateLimitExceededResponse(rl.reset);
 
-  let client;
-  try {
-    client = getGeminiClient();
-  } catch (err) {
-    const msg = friendlyAIError(err);
-    return Response.json({ error: msg }, { status: 500 });
-  }
-
   const transcript = (messages ?? [])
     .map((m) => `${m.role === "user" ? "Founder" : "Coach"}: ${m.content}`)
     .join("\n\n");
@@ -66,18 +58,15 @@ export async function POST(request: NextRequest) {
   const models = modelChainForTier(plan.tier);
 
   try {
-    const result = await geminiCallWithFallback(models, (modelName) => {
-      const model = client.getGenerativeModel({
+    const rawText = await aiCallWithFallback(models, (modelName) =>
+      generateContent({
         model: modelName,
-        systemInstruction: getPersonaPrompt(locale),
-        generationConfig: {
-          responseMimeType: "application/json",
-          temperature: 0.9,
-        },
-      });
-      return model.generateContent(userPrompt);
-    });
-    const rawText = result.response.text();
+        systemPrompt: getPersonaPrompt(locale),
+        userPrompt,
+        jsonMode: true,
+        temperature: 0.9,
+      })
+    );
     const jsonStr = extractJson(rawText);
     const data = JSON.parse(jsonStr) as { personas?: Persona[] };
     const personas = (data.personas ?? []).filter(

@@ -1,61 +1,122 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+/**
+ * AI provider abstraction — Groq (Llama 3.3 70B) via OpenAI-compatible API.
+ *
+ * Replaces the previous Gemini-only backend. Uses the OpenAI SDK pointed
+ * at Groq's endpoint. All exported functions maintain the same interface
+ * so API routes need minimal changes.
+ *
+ * Set GROQ_API_KEY in .env.local. Get a free key at https://console.groq.com
+ */
+
+import OpenAI from "openai";
 import { getTier } from "@/lib/billing/plan";
 import type { SubscriptionTier } from "@/lib/supabase/database.types";
 
-export function getGeminiClient(): GoogleGenerativeAI {
-  const key = process.env.GEMINI_API_KEY;
+// ---------------------------------------------------------------------------
+// Client
+// ---------------------------------------------------------------------------
+
+let _client: OpenAI | null = null;
+
+export function getAIClient(): OpenAI {
+  if (_client) return _client;
+  const key = process.env.GROQ_API_KEY;
   if (!key) {
     throw new Error(
-      "GEMINI_API_KEY is not set. Get a free key at https://aistudio.google.com/apikey"
+      "GROQ_API_KEY is not set. Get a free key at https://console.groq.com"
     );
   }
-  return new GoogleGenerativeAI(key);
+  _client = new OpenAI({
+    apiKey: key,
+    baseURL: "https://api.groq.com/openai/v1",
+  });
+  return _client;
 }
 
-// Default fallback when we don't know the caller's plan (e.g. internal
-// utilities). Most API routes pick a plan-specific model via modelForTier
-// below.
+// ---------------------------------------------------------------------------
+// Model selection
+// ---------------------------------------------------------------------------
+
+// Groq model names — Llama 3.3 70B is the best free option.
+// Override globally via AI_MODEL env var.
 export const MODEL_NAME =
-  process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
+  process.env.AI_MODEL || "llama-3.3-70b-versatile";
 
-/**
- * Resolve which Gemini model to use for a given subscription tier.
- * GEMINI_MODEL env var is honored when set (lets us downshift globally
- * if we're rate-limited); otherwise we use the per-tier default.
- */
 export function modelForTier(tier: SubscriptionTier): string {
-  if (process.env.GEMINI_MODEL) return process.env.GEMINI_MODEL;
-  return getTier(tier).geminiModel;
+  if (process.env.AI_MODEL) return process.env.AI_MODEL;
+  // All tiers get the same model on Groq (no per-model rate limits like Gemini)
+  return "llama-3.3-70b-versatile";
 }
 
-/**
- * Return an ordered list of models to try for a given tier.
- * On 429, geminiCall will fall through to the next model in the chain.
- * Each model has its own rate limit bucket, so switching models
- * effectively bypasses the exhausted quota.
- */
 export function modelChainForTier(tier: SubscriptionTier): string[] {
-  if (process.env.GEMINI_MODEL) return [process.env.GEMINI_MODEL];
+  if (process.env.AI_MODEL) return [process.env.AI_MODEL];
+  // Fallback chain: 70B → 8B (much higher rate limit)
+  return ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+}
 
-  const primary = getTier(tier).geminiModel;
+// ---------------------------------------------------------------------------
+// High-level helpers for API routes
+// ---------------------------------------------------------------------------
 
-  // Build a fallback chain — deduplicated, primary first
-  const chain: string[] = [primary];
-  const fallbacks =
-    tier === "free"
-      ? ["gemini-2.0-flash-lite", "gemini-2.0-flash"]
-      : ["gemini-2.5-flash-lite", "gemini-2.0-flash"];
-
-  for (const m of fallbacks) {
-    if (!chain.includes(m)) chain.push(m);
-  }
-  return chain;
+export interface AIGenerateOptions {
+  model: string;
+  systemPrompt: string;
+  userPrompt: string;
+  jsonMode?: boolean;
+  temperature?: number;
 }
 
 /**
- * Return a user-friendly message for Gemini / AI errors.
- * Keeps technical details out of production responses.
+ * Non-streaming text/JSON generation. Used by analyze, redteam, personas,
+ * names, search, and title routes.
  */
+export async function generateContent(opts: AIGenerateOptions): Promise<string> {
+  const client = getAIClient();
+  const response = await client.chat.completions.create({
+    model: opts.model,
+    messages: [
+      { role: "system", content: opts.systemPrompt },
+      { role: "user", content: opts.userPrompt },
+    ],
+    temperature: opts.temperature ?? 0.7,
+    ...(opts.jsonMode ? { response_format: { type: "json_object" } } : {}),
+  });
+  return response.choices[0]?.message?.content ?? "";
+}
+
+/**
+ * Streaming chat completion. Used by the /api/chat route.
+ * Returns an async iterable of text chunks.
+ */
+export async function streamChat(opts: {
+  model: string;
+  systemPrompt: string;
+  messages: Array<{ role: "user" | "assistant"; content: string }>;
+}): Promise<AsyncIterable<string>> {
+  const client = getAIClient();
+  const stream = await client.chat.completions.create({
+    model: opts.model,
+    messages: [
+      { role: "system", content: opts.systemPrompt },
+      ...opts.messages,
+    ],
+    stream: true,
+  });
+
+  return {
+    async *[Symbol.asyncIterator]() {
+      for await (const chunk of stream) {
+        const text = chunk.choices[0]?.delta?.content;
+        if (text) yield text;
+      }
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Friendly error messages
+// ---------------------------------------------------------------------------
+
 export function friendlyAIError(err: unknown): string {
   const msg =
     err instanceof Error ? err.message : typeof err === "string" ? err : "";
@@ -73,7 +134,6 @@ export function friendlyAIError(err: unknown): string {
   if (lower.includes("500") || lower.includes("internal") || lower.includes("server error")) {
     return "The AI service encountered an issue. Please try again in a moment.";
   }
-  // Generic fallback — still no raw internals
   return "Something went wrong. Please try again.";
 }
 
@@ -88,18 +148,12 @@ function isRateLimited(err: unknown): boolean {
     msg.includes("429") ||
     msg.includes("rate") ||
     msg.includes("quota") ||
-    msg.includes("resource has been exhausted") ||
     msg.includes("503") ||
     msg.includes("overloaded") ||
     msg.includes("unavailable")
   );
 }
 
-/**
- * Retry a function up to `maxRetries` times with exponential backoff
- * when the error looks like a transient rate limit / overload.
- * Non-retryable errors are thrown immediately.
- */
 export async function withRetry<T>(
   fn: () => Promise<T>,
   maxRetries = 2,
@@ -120,10 +174,10 @@ export async function withRetry<T>(
 }
 
 // ---------------------------------------------------------------------------
-// Global request queue — serializes Gemini calls to avoid burst 429s
+// Global request queue
 // ---------------------------------------------------------------------------
 
-const CONCURRENCY = Number(process.env.GEMINI_CONCURRENCY) || 2;
+const CONCURRENCY = Number(process.env.AI_CONCURRENCY) || 3;
 
 let active = 0;
 const waiting: Array<() => void> = [];
@@ -139,18 +193,13 @@ async function acquireSlot(): Promise<void> {
 function releaseSlot(): void {
   const next = waiting.shift();
   if (next) {
-    next(); // hand the slot to the next waiter
+    next();
   } else {
     active--;
   }
 }
 
-/**
- * Run a Gemini call through the global queue + retry pipeline.
- * At most CONCURRENCY (default 2) calls run in parallel; the rest
- * wait. Each call retries up to 2 times on transient 429/503 errors.
- */
-export async function geminiCall<T>(fn: () => Promise<T>): Promise<T> {
+export async function aiCall<T>(fn: () => Promise<T>): Promise<T> {
   await acquireSlot();
   try {
     return await withRetry(fn);
@@ -159,13 +208,7 @@ export async function geminiCall<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-/**
- * Try a Gemini call with automatic model fallback on 429.
- * Accepts a factory that receives a model name and returns the promise.
- * Walks through the model chain for the tier — each model has its own
- * rate limit bucket, so switching models bypasses exhausted quotas.
- */
-export async function geminiCallWithFallback<T>(
+export async function aiCallWithFallback<T>(
   models: string[],
   fn: (modelName: string) => Promise<T>
 ): Promise<T> {
@@ -177,9 +220,7 @@ export async function geminiCallWithFallback<T>(
         return await withRetry(() => fn(models[i]));
       } catch (err) {
         lastErr = err;
-        // Only fall through to next model on rate limit errors
         if (!isRateLimited(err) || i >= models.length - 1) throw err;
-        // Small pause before trying next model
         await new Promise((r) => setTimeout(r, 500));
       }
     }
@@ -188,3 +229,8 @@ export async function geminiCallWithFallback<T>(
     releaseSlot();
   }
 }
+
+// Backward-compat aliases
+export const getGeminiClient = getAIClient;
+export const geminiCall = aiCall;
+export const geminiCallWithFallback = aiCallWithFallback;

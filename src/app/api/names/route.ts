@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getGeminiClient, modelChainForTier, friendlyAIError, geminiCallWithFallback } from "@/lib/gemini";
+import { modelChainForTier, aiCallWithFallback, generateContent } from "@/lib/gemini";
 import { getNameSuggestionPrompt } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { SearchBodySchema, parseBody } from "@/lib/validation";
@@ -61,29 +61,18 @@ export async function POST(request: NextRequest) {
   const rl = await checkRateLimit(plan.userId);
   if (rl && !rl.success) return rateLimitExceededResponse(rl.reset);
 
-  let client;
-  try {
-    client = getGeminiClient();
-  } catch (err) {
-    const msg = friendlyAIError(err);
-    return Response.json({ error: msg }, { status: 500 });
-  }
-
   const models = modelChainForTier(plan.tier);
 
   try {
-    const result = await geminiCallWithFallback(models, (modelName) => {
-      const model = client.getGenerativeModel({
+    const rawText = await aiCallWithFallback(models, (modelName) =>
+      generateContent({
         model: modelName,
-        systemInstruction: getNameSuggestionPrompt(locale),
-        generationConfig: {
-          responseMimeType: "application/json",
-          temperature: 1.0,
-        },
-      });
-      return model.generateContent(ideaSummary);
-    });
-    const rawText = result.response.text();
+        systemPrompt: getNameSuggestionPrompt(locale),
+        userPrompt: ideaSummary,
+        jsonMode: true,
+        temperature: 1.0,
+      })
+    );
     const jsonStr = extractJson(rawText);
     const data = JSON.parse(jsonStr) as {
       names?: Array<{ name: string; domain: string; tagline: string }>;

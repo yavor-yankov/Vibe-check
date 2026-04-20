@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getGeminiClient, modelChainForTier, friendlyAIError, geminiCallWithFallback } from "@/lib/gemini";
+import { modelChainForTier, friendlyAIError, aiCallWithFallback, streamChat } from "@/lib/gemini";
 import { getInterviewPrompt } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { ChatBodySchema, parseBody } from "@/lib/validation";
@@ -41,29 +41,13 @@ export async function POST(request: NextRequest) {
   const rl = await checkRateLimit(plan.userId);
   if (rl && !rl.success) return rateLimitExceededResponse(rl.reset);
 
-  let client;
-  try {
-    client = getGeminiClient();
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Gemini not configured";
-    return new Response(JSON.stringify({ error: msg }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  // Gemini expects history with user/model roles. First turn is the user's seed idea.
   // Cap to the most recent 16 messages to stay well within token limits on
-  // free-tier models. The system prompt + 16 messages ≈ 4-6k tokens, leaving
+  // free-tier models. The system prompt + 16 messages ~ 4-6k tokens, leaving
   // plenty of headroom for the response.
   const MAX_HISTORY = 16;
   const recent = messages.length > MAX_HISTORY + 1
     ? messages.slice(messages.length - MAX_HISTORY - 1)
     : messages;
-  const history = recent.slice(0, -1).map((m) => ({
-    role: m.role === "assistant" ? "model" : "user",
-    parts: [{ text: m.content }],
-  }));
   const last = recent[recent.length - 1];
   if (last.role !== "user") {
     return new Response(
@@ -75,24 +59,26 @@ export async function POST(request: NextRequest) {
   const models = modelChainForTier(plan.tier);
 
   try {
-    // geminiCallWithFallback handles queue + retry + model fallback.
+    // aiCallWithFallback handles queue + retry + model fallback.
     // On 429 from the primary model, it tries the next model in the chain.
-    const result = await geminiCallWithFallback(models, (modelName) => {
-      const model = client.getGenerativeModel({
+    const chatHistory = recent.slice(0, -1).map((m) => ({
+      role: m.role === "assistant" ? "assistant" as const : "user" as const,
+      content: m.content,
+    }));
+    const result = await aiCallWithFallback(models, (modelName) =>
+      streamChat({
         model: modelName,
-        systemInstruction: getInterviewPrompt(locale),
-      });
-      const chat = model.startChat({ history });
-      return chat.sendMessageStream(last.content);
-    });
+        systemPrompt: getInterviewPrompt(locale),
+        messages: chatHistory.concat([{ role: "user" as const, content: last.content }]),
+      })
+    );
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          for await (const chunk of result.stream) {
-            const text = chunk.text();
-            if (text) controller.enqueue(encoder.encode(text));
+          for await (const text of result) {
+            controller.enqueue(encoder.encode(text));
           }
           controller.close();
         } catch (err) {

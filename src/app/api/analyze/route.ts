@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getGeminiClient, modelChainForTier, friendlyAIError, geminiCallWithFallback } from "@/lib/gemini";
+import { modelChainForTier, aiCallWithFallback, generateContent } from "@/lib/gemini";
 import { getAnalysisPrompt } from "@/lib/prompts";
 import { consumeUsage, refundUsage } from "@/lib/billing/usage";
 import { AnalyzeBodySchema, parseBody } from "@/lib/validation";
@@ -208,17 +208,6 @@ export async function POST(request: NextRequest) {
   if (!parsed.ok) return parsed.response;
   const { messages, ideaSummary, competitors, founderProfile, locale } = parsed.data;
 
-  // Resolve the Gemini client FIRST so a missing API key never burns a
-  // quota slot. Only once we know the downstream call is reachable do we
-  // consume a check.
-  let client;
-  try {
-    client = getGeminiClient();
-  } catch (err) {
-    const msg = friendlyAIError(err);
-    return Response.json({ error: msg }, { status: 500 });
-  }
-
   // Quota + plan gate — a successful analyze counts as "one vibe check"
   // against the monthly budget. Quota errors surface as 402 so the client
   // can show the upgrade CTA without treating it like a server crash.
@@ -277,18 +266,15 @@ export async function POST(request: NextRequest) {
   const models = modelChainForTier(plan.tier);
 
   try {
-    const result = await geminiCallWithFallback(models, (modelName) => {
-      const model = client.getGenerativeModel({
+    const raw = await aiCallWithFallback(models, (modelName) =>
+      generateContent({
         model: modelName,
-        systemInstruction: getAnalysisPrompt(locale),
-        generationConfig: {
-          responseMimeType: "application/json",
-          temperature: 0.6,
-        },
-      });
-      return model.generateContent(userPrompt);
-    });
-    const raw = result.response.text();
+        systemPrompt: getAnalysisPrompt(locale),
+        userPrompt,
+        jsonMode: true,
+        temperature: 0.6,
+      })
+    );
     const jsonStr = extractJson(raw);
     const parsed = JSON.parse(jsonStr) as AnalysisReport & {
       insights?: unknown;
@@ -326,7 +312,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ report });
   } catch (err) {
     // Analysis failed after we already charged the user — roll the slot
-    // back so transient Gemini errors don't eat free-tier quota.
+    // back so transient AI errors don't eat free-tier quota.
     await refundUsage(plan.userId, plan.usageMonth);
     log.error({ err }, "Analysis generation failed");
     return Response.json(

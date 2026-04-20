@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { logger } from "@/lib/logger";
 
 const log = logger.child({ route: "/api/search" });
-import { getGeminiClient, modelForTier } from "@/lib/gemini";
+import { modelForTier, aiCall, generateContent } from "@/lib/gemini";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import {
   readCachedSearch,
@@ -31,16 +31,18 @@ async function generateSearchQueries(
   count: number = 3
 ): Promise<string[]> {
   try {
-    const client = getGeminiClient();
-    const prompt = `You are a search query generator. Given a product idea summary, output ${count} short, high-signal web search queries (max 8 words each) that would surface existing competitor apps or similar products. Focus on product names/categories, not features. Return ONLY a JSON array of strings, no other text. Example: ["AI habit tracker app", "habit streak mobile app"]`;
-    const model = client.getGenerativeModel({
-      model: modelName,
-      systemInstruction: prompt,
-    });
-    const result = await model.generateContent(ideaSummary);
-    const raw = result.response.text().trim();
+    const systemPrompt = `You are a search query generator. Given a product idea summary, output ${count} short, high-signal web search queries (max 8 words each) that would surface existing competitor apps or similar products. Focus on product names/categories, not features. Return ONLY a JSON array of strings, no other text. Example: ["AI habit tracker app", "habit streak mobile app"]`;
+    const raw = await aiCall(() =>
+      generateContent({
+        model: modelName,
+        systemPrompt,
+        userPrompt: ideaSummary,
+        jsonMode: true,
+        temperature: 0.7,
+      })
+    );
     // strip possible code fences
-    const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "");
+    const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "");
     const parsed = JSON.parse(cleaned);
     if (Array.isArray(parsed) && parsed.every((q) => typeof q === "string")) {
       return parsed.slice(0, count);
@@ -76,7 +78,7 @@ async function tavilySearch(
     title: (r.title ?? "").slice(0, 300),
     url: r.url,
     // Tavily `content` can be several KB — cap it to 2 000 chars so it
-    // passes the CompetitorSchema and doesn't bloat the Gemini prompt.
+    // passes the CompetitorSchema and doesn't bloat the AI prompt.
     snippet: (r.content ?? "").slice(0, 2_000),
   }));
 }
