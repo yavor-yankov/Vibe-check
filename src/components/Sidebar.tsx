@@ -223,7 +223,6 @@ export default function Sidebar({
             )}
           </div>
         )}
-        </button>
 
         {/* ── Idea Library search + filters ── */}
         <div className="px-3 pt-4 pb-2 space-y-2">
