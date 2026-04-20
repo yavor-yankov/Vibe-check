@@ -90,7 +90,18 @@ export default function InterviewStage({
       setUnreadCount((n) => n + (newCount - prevCount));
       setShowScrollBtn(true);
     }
-  }, [messages, scrollToBottom]);
+  }, [messages.length, scrollToBottom]);
+
+  // Keep the view pinned to the bottom while streaming updates the last
+  // message in place (content changes but message count stays the same).
+  const lastContent = messages[messages.length - 1]?.content;
+  useEffect(() => {
+    if (!isStreaming) return;
+    if (atBottomRef.current) {
+      const el = scrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }
+  }, [lastContent, isStreaming]);
 
   // Initial scroll on mount (no animation).
   useEffect(() => {
