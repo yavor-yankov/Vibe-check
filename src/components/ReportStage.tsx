@@ -13,6 +13,7 @@ import {
   Flame,
   Globe,
   Layers,
+  Link2,
   Mail,
   Map,
   Pencil,
@@ -26,6 +27,7 @@ import type { AnalysisReport, Competitor, NameSuggestion, Persona, RedTeamReport
 import { useTranslation } from "@/lib/i18n/useTranslation";
 import InsightsPanel from "./InsightsPanel";
 import ScoreHistoryChart from "./ScoreHistoryChart";
+import { trackEvent } from "@/lib/analytics";
 
 interface ReportStageProps {
   sessionId: string;
@@ -291,11 +293,53 @@ export default function ReportStage({
     }
   }
 
-  function handleExportPdf() {
-    const original = document.title;
-    document.title = `Vibe Check — ${report.verdictLabel}`;
-    window.print();
-    document.title = original;
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [shareStatus, setShareStatus] = useState<"idle" | "loading" | "copied">("idle");
+
+  async function handleExportPdf() {
+    setPdfLoading(true);
+    trackEvent("pdf_downloaded");
+    try {
+      const res = await fetch("/api/export-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId }),
+      });
+      if (!res.ok) throw new Error("PDF generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.headers.get("Content-Disposition")?.match(/filename="(.+)"/)?.[1] || "vibe-check-report.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Failed to generate PDF. Please try again.");
+    } finally {
+      setPdfLoading(false);
+    }
+  }
+
+  async function handleShare() {
+    setShareStatus("loading");
+    trackEvent("share_clicked");
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/share`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: true }),
+      });
+      if (!res.ok) throw new Error("Share failed");
+      const { url } = await res.json();
+      await navigator.clipboard.writeText(url);
+      setShareStatus("copied");
+      setTimeout(() => setShareStatus("idle"), 3000);
+    } catch {
+      alert("Failed to generate share link.");
+      setShareStatus("idle");
+    }
   }
 
   function handleExportMarkdown() {
@@ -925,11 +969,12 @@ export default function ReportStage({
           <div className="pointer-events-auto flex items-center gap-1.5 rounded-xl bg-[color:var(--card)] border border-[color:var(--border)] shadow-lg px-2 py-1.5">
             <button
               onClick={handleExportPdf}
-              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium hover:bg-[color:var(--background)] transition"
+              disabled={pdfLoading}
+              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium hover:bg-[color:var(--background)] transition disabled:opacity-50"
               title={t("report.exportPdfTooltip")}
             >
               <Download size={13} />
-              {t("report.exportPdf")}
+              {pdfLoading ? "..." : t("report.exportPdf")}
             </button>
             <button
               onClick={handleExportMarkdown}
@@ -956,6 +1001,15 @@ export default function ReportStage({
             >
               <Mail size={13} />
               {emailStatus === "sending" ? t("report.emailSending") : emailStatus === "sent" ? t("report.emailSent") : emailStatus === "error" ? t("report.emailFailed") : t("report.emailButton")}
+            </button>
+            <button
+              onClick={handleShare}
+              disabled={shareStatus === "loading"}
+              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium hover:bg-[color:var(--background)] transition disabled:opacity-50"
+              title="Copy shareable link"
+            >
+              <Link2 size={13} />
+              {shareStatus === "copied" ? "Copied!" : shareStatus === "loading" ? "..." : "Share"}
             </button>
             <div className="w-px h-5 bg-[color:var(--border)]" />
             <button

@@ -29,6 +29,15 @@ export default async function PricingPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Fetch lifetime subscriber count for scarcity display.
+  const lifetimeCap = parseInt(process.env.LIFETIME_CAP || "100", 10);
+  const { count: lifetimeCount } = await supabase
+    .from("users")
+    .select("id", { count: "exact", head: true })
+    .eq("subscription_tier", "lifetime");
+  const lifetimeRemaining = Math.max(0, lifetimeCap - (lifetimeCount ?? 0));
+  const lifetimeSoldOut = lifetimeRemaining === 0;
+
   const tiers = [
     PRICING_TIERS.free,
     PRICING_TIERS.pro,
@@ -85,6 +94,11 @@ export default async function PricingPage() {
                 <p className="mt-2 text-sm text-[color:var(--muted)]">
                   {tier.blurb}
                 </p>
+                {tier.tier === "lifetime" && (
+                  <p className={`mt-1 text-xs font-medium ${lifetimeSoldOut ? "text-[color:var(--bad)]" : "text-[color:var(--accent)]"}`}>
+                    {lifetimeSoldOut ? "Sold out" : `${lifetimeRemaining} of ${lifetimeCap} remaining`}
+                  </p>
+                )}
 
                 <ul className="mt-6 space-y-2.5 text-sm flex-1">
                   {tier.features.map((f) => (

@@ -28,6 +28,7 @@ import {
   fetchSessions,
   persistSession,
 } from "@/lib/client/sessions-api";
+import { trackEvent } from "@/lib/analytics";
 
 const MIGRATION_FLAG = "vibe-check-migrated-v1";
 
@@ -267,6 +268,7 @@ export default function Home() {
   const startInterview = async (seed: string, founderProfile?: FounderProfile) => {
     if (!current) return;
     setError(null);
+    trackEvent("check_started");
     const userMsg = buildUserMessage(seed);
     const next: Session = {
       ...current,
@@ -462,6 +464,7 @@ export default function Home() {
       persist(done);
       // Notify the sidebar UsageBadge that a quota slot was consumed.
       setUsageRefreshSignal((n) => n + 1);
+      trackEvent("check_completed", { verdict: analyzeData.report.verdict });
     } catch (err) {
       clearTimeout(timeout);
       const isAbort = err instanceof DOMException && err.name === "AbortError";
