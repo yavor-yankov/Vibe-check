@@ -97,6 +97,7 @@ export interface Database {
           stage: SessionStage;
           idea_summary: string | null;
           report_generation: number;
+          public_slug: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -107,12 +108,14 @@ export interface Database {
           stage?: SessionStage;
           idea_summary?: string | null;
           report_generation?: number;
+          public_slug?: string | null;
         };
         Update: {
           title?: string;
           stage?: SessionStage;
           idea_summary?: string | null;
           report_generation?: number;
+          public_slug?: string | null;
         };
         Relationships: EmptyRelationships;
       };
