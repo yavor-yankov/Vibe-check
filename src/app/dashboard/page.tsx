@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import CompareView from "@/components/CompareView";
 import IntroStage from "@/components/IntroStage";
+import OnboardingOverlay from "@/components/OnboardingOverlay";
 import InterviewStage, {
   buildAssistantMessage,
   buildUserMessage,
@@ -623,6 +624,7 @@ export default function Home() {
 
   return (
     <div className="flex h-screen overflow-hidden">
+      <OnboardingOverlay hasNoSessions={sessions.length === 0} />
       <Sidebar
         sessions={sessions}
         activeId={current.id}
