@@ -241,7 +241,8 @@ export default function ReportStage({
 }: ReportStageProps) {
   const { t } = useTranslation();
   const verdictStyle = VERDICT_STYLES[report.verdict] ?? VERDICT_STYLES.iterate;
-  const verdictLabel = t(verdictStyle.labelKey as string);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const verdictLabel = t(verdictStyle.labelKey as any);
   const [refineOpen, setRefineOpen] = useState(false);
   const [refineDraft, setRefineDraft] = useState(ideaSummary);
   const [redTeamOpen, setRedTeamOpen] = useState(false);
