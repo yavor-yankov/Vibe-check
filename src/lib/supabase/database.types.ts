@@ -233,6 +233,21 @@ export interface Database {
         };
         Relationships: SessionFkRelationship<"red_team_reports_session_id_fkey">;
       };
+      stripe_events: {
+        Row: {
+          event_id: string;
+          created_at: string;
+        };
+        Insert: {
+          event_id: string;
+          created_at?: string;
+        };
+        Update: {
+          event_id?: string;
+          created_at?: string;
+        };
+        Relationships: EmptyRelationships;
+      };
     };
     Views: Record<string, never>;
     Functions: {

@@ -56,6 +56,20 @@ export async function POST(request: Request) {
 
   const admin = createSupabaseAdminClient();
 
+  // ─── Idempotency guard ──────────────────────────────────────────────────
+  // Stripe retries failed webhooks for up to 3 days. Reject duplicates.
+  const { error: insertErr } = await admin
+    .from("stripe_events")
+    .insert({ event_id: event.id });
+  if (insertErr) {
+    // Unique constraint violation → already processed this event.
+    if (insertErr.code === "23505") {
+      return NextResponse.json({ received: true, duplicate: true });
+    }
+    // Other DB error — log but continue processing (fail-open).
+    console.error("stripe_events insert error:", insertErr.message);
+  }
+
   try {
     switch (event.type) {
       case "checkout.session.completed": {
