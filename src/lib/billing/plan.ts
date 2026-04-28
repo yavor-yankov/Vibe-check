@@ -16,7 +16,7 @@ export const PRICING_TIERS = {
     priceUsd: 0,
     priceLabel: "$0",
     monthlyQuota: 3,
-    geminiModel: "gemini-2.5-flash-lite",
+    aiModel: "llama-3.3-70b-versatile",
     // Whether the red-team pass is unlocked for this tier.
     redTeamEnabled: true,
     features: [
@@ -34,11 +34,11 @@ export const PRICING_TIERS = {
     priceUsd: 9,
     priceLabel: "$9/mo",
     monthlyQuota: Infinity,
-    geminiModel: "gemini-2.5-flash",
+    aiModel: "llama-3.3-70b-versatile",
     redTeamEnabled: true,
     features: [
       "Unlimited vibe checks",
-      "Higher-reasoning Gemini Flash model",
+      "Advanced AI model (Llama 3.3 70B)",
       "Everything in Free",
       "Priority during API outages",
     ],
@@ -51,7 +51,7 @@ export const PRICING_TIERS = {
     priceUsd: 49,
     priceLabel: "$49 once",
     monthlyQuota: Infinity,
-    geminiModel: "gemini-2.5-flash",
+    aiModel: "llama-3.3-70b-versatile",
     redTeamEnabled: true,
     features: [
       "Everything in Pro, forever",

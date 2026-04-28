@@ -16,7 +16,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 See [`.env.example`](./.env.example) for the full list.
 
-- `GEMINI_API_KEY` — free from https://aistudio.google.com/apikey
+- `GROQ_API_KEY` — free from https://console.groq.com
 - `TAVILY_API_KEY` — free from https://app.tavily.com (1000 searches / mo)
 - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` — from https://supabase.com
 
@@ -51,7 +51,7 @@ Without step 2, Supabase will ignore the `emailRedirectTo` parameter and fall ba
 
 ## Stack
 
-Next.js 16 · React 19 · TypeScript · Tailwind 4 · Zod · Supabase (Postgres + Auth) · Google Gemini · Tavily.
+Next.js 16 · React 19 · TypeScript · Tailwind 4 · Zod · Supabase (Postgres + Auth) · Groq (Llama 3.3 70B) · Tavily.
 
 ## Roadmap
 

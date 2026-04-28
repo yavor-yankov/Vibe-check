@@ -45,7 +45,7 @@ export default function PrivacyPage() {
             <h2 className="text-xl font-semibold mb-3">2. How We Use It</h2>
             <ul className="list-disc list-inside space-y-1 text-[color:var(--muted)]">
               <li>To authenticate you and maintain your session</li>
-              <li>To send your idea through our AI pipeline (Google Gemini) and web search (Tavily)</li>
+              <li>To send your idea through our AI pipeline (Groq) and web search (Tavily)</li>
               <li>To enforce monthly usage quotas and process payments</li>
               <li>To improve the reliability and quality of the Service</li>
             </ul>
@@ -59,7 +59,7 @@ export default function PrivacyPage() {
             <h2 className="text-xl font-semibold mb-3">3. Third-Party Processors</h2>
             <ul className="list-disc list-inside space-y-1 text-[color:var(--muted)]">
               <li><strong>Supabase</strong> — database and authentication (EU data residency available)</li>
-              <li><strong>Google Gemini</strong> — AI language model for idea analysis</li>
+              <li><strong>Groq</strong> — AI language model for idea analysis</li>
               <li><strong>Tavily</strong> — web search for competitor discovery</li>
               <li><strong>Stripe</strong> — payment processing</li>
               <li><strong>Vercel</strong> — hosting and edge network</li>

@@ -3,7 +3,7 @@
  *
  * Enforcing hard size limits on incoming payloads prevents:
  * - Malformed data crashing the server with cryptic errors
- * - Oversized messages exhausting Gemini token budgets
+ * - Oversized messages exhausting AI token budgets
  * - History padding attacks that sneak extra tokens past the quota gate
  */
 
@@ -30,7 +30,7 @@ export const CompetitorSchema = z.object({
   title: z.string().max(300).transform((v) => v.slice(0, 300)),
   url: z.string().url().max(2_000),
   // Tavily can return very long snippets. Truncate silently rather than
-  // rejecting the whole request — the Gemini prompt only uses the first
+  // rejecting the whole request — the AI prompt only uses the first
   // ~400 chars anyway.
   snippet: z.string().transform((v) => v.slice(0, 2_000)),
 });

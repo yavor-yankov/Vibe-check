@@ -8,11 +8,11 @@ import PricingCheckoutButton from "./PricingCheckoutButton";
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "Start free with 5 vibe checks per month. Upgrade to Pro for unlimited checks, priority AI, and advanced competitor analysis.",
+    "Start free with 3 vibe checks per month. Upgrade to Pro for unlimited checks, priority AI, and advanced competitor analysis.",
   openGraph: {
     title: "Vibe Check Pricing — Free & Pro Plans",
     description:
-      "Start free with 5 vibe checks per month. Upgrade to Pro for unlimited checks, priority AI, and advanced competitor analysis.",
+      "Start free with 3 vibe checks per month. Upgrade to Pro for unlimited checks, priority AI, and advanced competitor analysis.",
   },
 };
 
@@ -53,7 +53,7 @@ export default async function PricingPage() {
           <p className="mt-3 text-lg text-[color:var(--muted)]">
             Kick the tires for free. When you&apos;re burning through
             ideas faster than 3 a month, Pro unlocks unlimited runs and
-            our higher-reasoning Gemini model.
+            our advanced AI model.
           </p>
         </div>
 

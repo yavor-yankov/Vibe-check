@@ -19,10 +19,10 @@ describe("PRICING_TIERS", () => {
     expect(PRICING_TIERS.lifetime.monthlyQuota).toBe(Infinity);
   });
 
-  it("all tiers have a non-empty geminiModel string", () => {
+  it("all tiers have a non-empty aiModel string", () => {
     for (const tier of Object.values(PRICING_TIERS)) {
-      expect(typeof tier.geminiModel).toBe("string");
-      expect(tier.geminiModel.length).toBeGreaterThan(0);
+      expect(typeof tier.aiModel).toBe("string");
+      expect(tier.aiModel.length).toBeGreaterThan(0);
     }
   });
 

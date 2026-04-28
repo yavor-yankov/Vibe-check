@@ -23,7 +23,7 @@ export interface PlanSnapshot {
   usageCount: number;
   remaining: number; // Infinity for unlimited tiers.
   quota: number; // Infinity for unlimited tiers.
-  geminiModel: string;
+  aiModel: string;
   stripeCustomerId: string | null;
   subscriptionStatus: string | null;
 }
@@ -60,7 +60,7 @@ export async function getPlanSnapshot(): Promise<PlanSnapshot | null> {
       usageCount: 0,
       remaining: PRICING_TIERS.free.monthlyQuota,
       quota: PRICING_TIERS.free.monthlyQuota,
-      geminiModel: PRICING_TIERS.free.geminiModel,
+      aiModel: PRICING_TIERS.free.aiModel,
       stripeCustomerId: null,
       subscriptionStatus: null,
     };
@@ -82,7 +82,7 @@ export async function getPlanSnapshot(): Promise<PlanSnapshot | null> {
       plan.monthlyQuota === Infinity
         ? Infinity
         : Math.max(0, plan.monthlyQuota - count),
-    geminiModel: plan.geminiModel,
+    aiModel: plan.aiModel,
     stripeCustomerId: row.stripe_customer_id,
     subscriptionStatus: row.subscription_status,
   };

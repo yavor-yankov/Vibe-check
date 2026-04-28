@@ -23,9 +23,9 @@ Issues are tracked on GitHub; this file gives the high-level phasing.
 **Verdict: pricing is healthy.** Pro tier breaks even at 269 checks/month — no realistic user hits that. Tavily is 72-92% of cost; the Supabase cache is the biggest cost saver.
 
 **Action items:**
-- Migrate title generation from `gemini-2.0-flash-lite` (deprecated June 1, 2026) to `gemini-2.5-flash-lite`
+- ~~Migrate title generation from `gemini-2.0-flash-lite` (deprecated June 1, 2026) to `gemini-2.5-flash-lite`~~ **DONE — migrated entirely to Groq (Llama 3.3 70B)**
 - Consider reducing Tavily from 3 to 2 queries for free tier to save $0.008/check
-- Monitor Gemini "thinking" token usage — `gemini-2.5-flash` charges $2.50/M for output including thinking tokens
+- Monitor Groq rate limits — free tier has per-model RPM/TPM limits
 
 ---
 
@@ -61,7 +61,7 @@ Issues are tracked on GitHub; this file gives the high-level phasing.
 - [ ] **Markdown export** — one-click download of the report as `.md` for pasting into Notion/docs.
 
 ### Cost optimization
-- [ ] **Migrate title gen model** — `gemini-2.0-flash-lite` shuts down June 1, 2026. Switch to `gemini-2.5-flash-lite`.
+- [x] ~~**Migrate title gen model**~~ — Done. Entire backend migrated to Groq (Llama 3.3 70B). No Gemini dependency.
 - [ ] **Free tier: 2 Tavily queries** — reduce from 3 to 2 search queries on free tier to cut Tavily cost by 33%.
 
 ### Observability
