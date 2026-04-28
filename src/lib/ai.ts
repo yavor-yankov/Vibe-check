@@ -229,8 +229,3 @@ export async function aiCallWithFallback<T>(
     releaseSlot();
   }
 }
-
-// Backward-compat aliases
-export const getGeminiClient = getAIClient;
-export const geminiCall = aiCall;
-export const geminiCallWithFallback = aiCallWithFallback;

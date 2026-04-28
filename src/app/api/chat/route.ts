@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { modelChainForTier, friendlyAIError, aiCallWithFallback, streamChat } from "@/lib/gemini";
+import { modelChainForTier, friendlyAIError, aiCallWithFallback, streamChat } from "@/lib/ai";
 import { getInterviewPrompt } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { ChatBodySchema, parseBody } from "@/lib/validation";

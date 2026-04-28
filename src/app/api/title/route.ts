@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { aiCall, generateContent, MODEL_NAME } from "@/lib/gemini";
+import { aiCall, generateContent, MODEL_NAME } from "@/lib/ai";
 import { getTitlePromptSuffix } from "@/lib/prompts";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/rate-limit";

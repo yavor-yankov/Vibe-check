@@ -31,7 +31,7 @@ vi.mock("@/lib/rate-limit", () => ({
 }));
 
 // Mock the AI module
-vi.mock("@/lib/gemini", () => ({
+vi.mock("@/lib/ai", () => ({
   aiCall: vi.fn(),
   aiCallWithFallback: vi.fn(),
   streamChat: vi.fn(),
@@ -41,9 +41,6 @@ vi.mock("@/lib/gemini", () => ({
   modelChainForTier: vi.fn().mockReturnValue(["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]),
   friendlyAIError: vi.fn().mockReturnValue("AI temporarily unavailable"),
   MODEL_NAME: "llama-3.3-70b-versatile",
-  getGeminiClient: vi.fn(),
-  geminiCall: vi.fn(),
-  geminiCallWithFallback: vi.fn(),
 }));
 
 // Mock server-only (no-op in tests)

@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { logger } from "@/lib/logger";
 
 const log = logger.child({ route: "/api/search" });
-import { modelForTier, aiCall, generateContent } from "@/lib/gemini";
+import { modelForTier, aiCall, generateContent } from "@/lib/ai";
 import { getPlanSnapshot } from "@/lib/billing/usage";
 import {
   readCachedSearch,

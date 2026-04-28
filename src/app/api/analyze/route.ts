@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { modelChainForTier, aiCallWithFallback, generateContent } from "@/lib/gemini";
+import { modelChainForTier, aiCallWithFallback, generateContent } from "@/lib/ai";
 import { getAnalysisPrompt } from "@/lib/prompts";
 import { consumeUsage, refundUsage } from "@/lib/billing/usage";
 import { AnalyzeBodySchema, parseBody } from "@/lib/validation";
