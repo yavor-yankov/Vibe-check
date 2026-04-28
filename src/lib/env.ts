@@ -30,6 +30,7 @@ const ENV_VARS: EnvVarSpec[] = [
   { name: "UPSTASH_REDIS_REST_TOKEN", required: false, description: "Upstash Redis token" },
   { name: "RESEND_API_KEY", required: false, description: "Resend API key for branded emails" },
   { name: "EMAIL_FROM", required: false, description: "Email sender address" },
+  { name: "NEXT_PUBLIC_SENTRY_DSN", required: false, description: "Sentry DSN for error tracking" },
 ];
 
 /**

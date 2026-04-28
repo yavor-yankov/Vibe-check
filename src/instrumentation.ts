@@ -1,14 +1,30 @@
 /**
  * Next.js instrumentation hook — runs once when the server starts.
- * Used for fail-fast environment validation.
+ * Used for Sentry initialization and fail-fast environment validation.
  */
 
-export function register() {
-  // Only validate on the server (Node.js runtime), not during build or edge.
+import { type Instrumentation } from "next";
+
+export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    // Dynamic import to avoid pulling server-only into edge/build.
-    import("@/lib/env").then(({ validateEnv }) => {
-      validateEnv();
-    });
+    // Initialize Sentry for server-side error tracking.
+    await import("../sentry.server.config");
+
+    // Validate environment variables (fail-fast on misconfiguration).
+    const { validateEnv } = await import("@/lib/env");
+    validateEnv();
+  }
+
+  if (process.env.NEXT_RUNTIME === "edge") {
+    await import("../sentry.edge.config");
   }
 }
+
+export const onRequestError: Instrumentation.onRequestError = async (
+  err,
+  request,
+  context
+) => {
+  const { captureRequestError } = await import("@sentry/nextjs");
+  captureRequestError(err, request, context);
+};
