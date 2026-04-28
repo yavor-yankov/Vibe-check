@@ -67,6 +67,10 @@ export default function Home() {
     sessionsRef.current = sessions;
   }, [sessions]);
 
+  // Shared AbortController ref for the red-team request so refineAnalysis
+  // can cancel an in-flight red-team fetch to avoid wasting API quota.
+  const redTeamAbortRef = useRef<AbortController | null>(null);
+
   // Per-session write queue. `persistSession` does a non-atomic
   // delete-then-insert on messages/competitors/etc., so two concurrent
   // writes for the same session can interleave and wipe rows from the
@@ -450,6 +454,11 @@ export default function Home() {
   const refineAnalysis = async (newSummary: string) => {
     if (!current) return;
     setError(null);
+    // Abort any in-flight red-team request to avoid wasting API quota.
+    if (redTeamAbortRef.current) {
+      redTeamAbortRef.current.abort();
+      redTeamAbortRef.current = null;
+    }
     resetRedTeamState();
     resetPersonasState();
     resetNamesState();
@@ -471,6 +480,7 @@ export default function Home() {
     setRedTeamError(null);
     setIsRedTeamLoading(true);
     const rtAbort = new AbortController();
+    redTeamAbortRef.current = rtAbort;
     const rtTimeout = setTimeout(() => rtAbort.abort(), 45_000);
     try {
       const res = await fetch("/api/redteam", {
@@ -509,16 +519,24 @@ export default function Home() {
         live?.id === sessionId &&
         (live.reportGeneration ?? 0) === generationAtStart
       ) {
-        const msg =
-          (err as Error)?.name === "AbortError"
-            ? "Red-team request timed out. Please try again."
-            : err instanceof Error
-              ? err.message
-              : "Unknown error";
-        setRedTeamError(msg);
+        // If aborted by refineAnalysis (not timeout), suppress the error.
+        if ((err as Error)?.name === "AbortError" && redTeamAbortRef.current !== rtAbort) {
+          // Aborted externally (refine triggered) — no error to show.
+        } else {
+          const msg =
+            (err as Error)?.name === "AbortError"
+              ? "Red-team request timed out. Please try again."
+              : err instanceof Error
+                ? err.message
+                : "Unknown error";
+          setRedTeamError(msg);
+        }
       }
     } finally {
       clearTimeout(rtTimeout);
+      if (redTeamAbortRef.current === rtAbort) {
+        redTeamAbortRef.current = null;
+      }
       const live = currentRef.current;
       if (
         live?.id === sessionId &&

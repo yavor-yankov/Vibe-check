@@ -36,6 +36,23 @@ export async function POST(request: Request) {
     );
   }
 
+  // ─── Lifetime cap enforcement ───────────────────────────────────────────
+  // Pricing claims "only the first 100" — enforce it server-side.
+  if (plan === "lifetime") {
+    const cap = parseInt(process.env.LIFETIME_CAP || "100", 10);
+    const admin = createSupabaseAdminClient();
+    const { count, error: countErr } = await admin
+      .from("users")
+      .select("id", { count: "exact", head: true })
+      .eq("subscription_tier", "lifetime");
+    if (!countErr && (count ?? 0) >= cap) {
+      return NextResponse.json(
+        { error: "Lifetime plan is sold out. All slots have been claimed." },
+        { status: 410 }
+      );
+    }
+  }
+
   const { data: row } = await supabase
     .from("users")
     .select("email,stripe_customer_id")
