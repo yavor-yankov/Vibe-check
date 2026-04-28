@@ -51,6 +51,7 @@ export default function Home() {
   // after each vibe check is consumed.
   const [usageRefreshSignal, setUsageRefreshSignal] = useState(0);
   const [compareSessionIds, setCompareSessionIds] = useState<string[] | null>(null);
+  const [isOffline, setIsOffline] = useState(false);
   const { locale } = useLocale();
 
   // Keep a ref to the latest active session so async callbacks don't
@@ -71,6 +72,26 @@ export default function Home() {
   // Shared AbortController ref for the red-team request so refineAnalysis
   // can cancel an in-flight red-team fetch to avoid wasting API quota.
   const redTeamAbortRef = useRef<AbortController | null>(null);
+
+  // ─── Offline detection ────────────────────────────────────────────────────
+  useEffect(() => {
+    const goOffline = () => setIsOffline(true);
+    const goOnline = () => {
+      setIsOffline(false);
+      // Re-persist the current session when we come back online.
+      if (currentRef.current) {
+        persistSession(currentRef.current).catch(() => {});
+      }
+    };
+    window.addEventListener("offline", goOffline);
+    window.addEventListener("online", goOnline);
+    // eslint-disable-next-line
+    setIsOffline(!navigator.onLine);
+    return () => {
+      window.removeEventListener("offline", goOffline);
+      window.removeEventListener("online", goOnline);
+    };
+  }, []);
 
   // Per-session write queue. `persistSession` does a non-atomic
   // delete-then-insert on messages/competitors/etc., so two concurrent
@@ -147,7 +168,18 @@ export default function Home() {
         })
         .then(() => persistSession(stamped))
         .catch(() => {
-          setError("Couldn't save your progress. Please check your connection and try again.");
+          // Save to localStorage as offline fallback.
+          try {
+            localStorage.setItem(
+              `vibe-check-offline-${stamped.id}`,
+              JSON.stringify(stamped)
+            );
+          } catch { /* storage full or unavailable */ }
+          if (!navigator.onLine) {
+            setIsOffline(true);
+          } else {
+            setError("Couldn't save your progress. Please check your connection and try again.");
+          }
         })
         .finally(() => {
           // Only clear the tail if nothing newer has been chained on.
@@ -662,6 +694,14 @@ export default function Home() {
           <div className="px-6 pt-4">
             <div className="max-w-3xl mx-auto rounded-lg border border-[color:var(--bad)]/30 bg-[color:var(--bad)]/5 px-4 py-3 text-sm text-[color:var(--bad)]">
               <b>Error:</b> {error}
+            </div>
+          </div>
+        )}
+
+        {!compareSessionIds && isOffline && (
+          <div className="px-6 pt-2">
+            <div className="max-w-3xl mx-auto rounded-lg border border-[color:var(--warn)]/30 bg-[color:var(--warn)]/5 px-4 py-2 text-xs text-[color:var(--warn)]">
+              You&apos;re offline — changes saved locally and will sync when you reconnect.
             </div>
           </div>
         )}
