@@ -46,6 +46,7 @@ export default function UsageBadge({ className, refreshSignal }: UsageBadgeProps
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line
     setLoading(true);
     fetch("/api/billing/usage")
       .then((r) => (r.ok ? r.json() : null))

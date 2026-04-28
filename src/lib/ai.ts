@@ -9,7 +9,6 @@
  */
 
 import OpenAI from "openai";
-import { getTier } from "@/lib/billing/plan";
 import type { SubscriptionTier } from "@/lib/supabase/database.types";
 
 // ---------------------------------------------------------------------------
@@ -42,13 +41,13 @@ export function getAIClient(): OpenAI {
 export const MODEL_NAME =
   process.env.AI_MODEL || "llama-3.3-70b-versatile";
 
-export function modelForTier(tier: SubscriptionTier): string {
+export function modelForTier(_tier: SubscriptionTier): string {
   if (process.env.AI_MODEL) return process.env.AI_MODEL;
   // All tiers get the same model on Groq (no per-model rate limits like Gemini)
   return "llama-3.3-70b-versatile";
 }
 
-export function modelChainForTier(tier: SubscriptionTier): string[] {
+export function modelChainForTier(_tier: SubscriptionTier): string[] {
   if (process.env.AI_MODEL) return [process.env.AI_MODEL];
   // Fallback chain: 70B → 8B (much higher rate limit)
   return ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];

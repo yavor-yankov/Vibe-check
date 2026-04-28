@@ -46,7 +46,7 @@ vi.mock("@/lib/ai", () => ({
 // Mock server-only (no-op in tests)
 vi.mock("server-only", () => ({}));
 
-import { getPlanSnapshot, consumeUsage } from "@/lib/billing/usage";
+import { getPlanSnapshot } from "@/lib/billing/usage";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 const mockPlan = {

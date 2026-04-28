@@ -30,6 +30,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored === "en" || stored === "bg") {
+        // eslint-disable-next-line
         setLocaleState(stored);
         document.documentElement.lang = stored;
       }
