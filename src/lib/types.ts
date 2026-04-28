@@ -198,4 +198,6 @@ export interface Session {
   // runRedTeam to detect a concurrent refine and avoid merging a stale
   // red-team response onto a freshly re-scored report.
   reportGeneration?: number;
+  // Score history for trend chart — appended on each successful analysis.
+  scoreHistory?: Array<{ timestamp: number; overall: number; verdict: string }>;
 }

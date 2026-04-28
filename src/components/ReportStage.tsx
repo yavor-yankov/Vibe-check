@@ -25,12 +25,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AnalysisReport, Competitor, NameSuggestion, Persona, RedTeamReport } from "@/lib/types";
 import { useTranslation } from "@/lib/i18n/useTranslation";
 import InsightsPanel from "./InsightsPanel";
+import ScoreHistoryChart from "./ScoreHistoryChart";
 
 interface ReportStageProps {
   sessionId: string;
   report: AnalysisReport;
   competitors: Competitor[];
   ideaSummary: string;
+  scoreHistory?: Array<{ timestamp: number; overall: number; verdict: string }>;
   redTeamReport?: RedTeamReport | null;
   isRedTeamLoading?: boolean;
   redTeamError?: string | null;
@@ -224,6 +226,7 @@ export default function ReportStage({
   report,
   competitors,
   ideaSummary,
+  scoreHistory,
   redTeamReport,
   isRedTeamLoading,
   redTeamError,
@@ -489,6 +492,11 @@ export default function ReportStage({
           />
         </div>
       </section>
+
+      {/* Score history trend chart */}
+      {scoreHistory && scoreHistory.length > 0 && (
+        <ScoreHistoryChart history={scoreHistory} />
+      )}
 
       <div className="grid md:grid-cols-2 gap-6">
         <section className="rounded-xl border border-[color:var(--border)] bg-[color:var(--card)] p-6">

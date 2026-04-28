@@ -417,6 +417,15 @@ export default function Home() {
         // Refining invalidates the prior red-team pass — force re-run.
         redTeamReport: null,
         reportGeneration: (scanning.reportGeneration ?? 0) + 1,
+        // Append to score history for the trend chart.
+        scoreHistory: [
+          ...(scanning.scoreHistory ?? []),
+          {
+            timestamp: Date.now(),
+            overall: analyzeData.report.scores.overall,
+            verdict: analyzeData.report.verdict,
+          },
+        ],
       };
       persist(done);
       // Notify the sidebar UsageBadge that a quota slot was consumed.
@@ -713,6 +722,7 @@ export default function Home() {
               report={current.report}
               competitors={current.competitors}
               ideaSummary={current.ideaSummary ?? ""}
+              scoreHistory={current.scoreHistory}
               redTeamReport={current.redTeamReport ?? null}
               isRedTeamLoading={isRedTeamLoading}
               redTeamError={redTeamError}
